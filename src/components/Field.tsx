@@ -5,13 +5,18 @@ import { NetworkTablesTopic, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 // A palette of distinct colors for locked waypoints
 const WAYPOINT_COLORS = ['#00FF00', '#00FFFF', '#FFA500', '#FF00FF', '#FFFF00', '#FFFFFF']; // Lime, Aqua, Orange, Fuchsia, Yellow, White
+enum WaypointType { Aim = "AIM", Shoot = "SHOOT", Move = "MOVE" }
 
-interface Waypoint {
-  pixel: { x: number; y: number };
+type Waypoint = {
+  status: "current" | "locked";
   pose: { x: number; y: number };
-  status: 'current' | 'locked';
+  pixel: { x: number; y: number };
   color: string;
-}
+  type: WaypointType;
+};
+
+
+
 
 const Field: React.FC = () => {
   const { nt, connected } = useNetworkTables();
@@ -150,7 +155,6 @@ const Field: React.FC = () => {
       status: 'current',
       color: 'red',
     };
-
     setWaypoints(prev => [...prev.filter(wp => wp.status !== 'current'), newWaypoint]);
     
     // Update the single-click topics
@@ -158,58 +162,94 @@ const Field: React.FC = () => {
     clickYTopicRef.current?.setValue(pose.y);
   };
 
-  const handleLockPose = () => {
-    setWaypoints(prev => {
-      const lockedCount = prev.filter(wp => wp.status === 'locked').length;
-      const nextColor = WAYPOINT_COLORS[lockedCount % WAYPOINT_COLORS.length];
-      
-      let newlyLockedIndex: number | null = null;
-      const updatedWaypoints = prev.map((wp, index) => {
-        if (wp.status === 'current') {
-          newlyLockedIndex = index;
-          return { ...wp, status: 'locked', color: nextColor };
-        }
-        return wp;
-      });
-      setSelectedWaypointIndex(newlyLockedIndex);
-      return updatedWaypoints;
-    });
-  };
+function getWaypointByType(type: WaypointType) {
+  return waypoints.find(wp => wp.type === type && wp.status === "locked") || null;
+}
 
-  const handleClearWaypoints = () => {
-    setWaypoints([]);
-    setSelectedWaypointIndex(null); // Clear selected waypoint when all are removed
-  };
+
+ 
+function createWaypoint(type: WaypointType, pose) {
+  setWaypoints(prev => {k
+    const lockedCount = prev.filter(wp => wp.status === "locked").length;
+    const nextColor = WAYPOINT_COLORS[lockedCount % WAYPOINT_COLORS.length];
+
+    // Remove old waypoint of this type
+    const withoutOld = prev.filter(wp => wp.type !== type);
+
+    const newWaypoint: Waypoint = {
+      status: "locked",
+      pose,
+      pixel: convertFieldToPixel(pose),
+      color: nextColor,
+      type
+    };
+
+    return [...withoutOld, newWaypoint];
+  });
+}
+
+
+
+
+
+
 
   const handleRobotAction = (
-    xTopic: NetworkTablesTopic<number> | null,
-    yTopic: NetworkTablesTopic<number> | null,
-    triggerTopic: NetworkTablesTopic<boolean> | null
-  ) => {
-    if (selectedWaypointIndex === null || waypoints[selectedWaypointIndex]?.status !== 'locked') return;
+  xTopic: NetworkTablesTopic<number> | null,
+  yTopic: NetworkTablesTopic<number> | null,
+  triggerTopic: NetworkTablesTopic<boolean> | null,
+  waypoint: Waypoint
+) => {
+  if (xTopic) xTopic.setValue(waypoint.pose.x);
+  if (yTopic) yTopic.setValue(waypoint.pose.y);
 
-    const selectedWaypoint = waypoints[selectedWaypointIndex];
-    if (xTopic) xTopic.setValue(selectedWaypoint.pose.x);
-    if (yTopic) yTopic.setValue(selectedWaypoint.pose.y);
-    if (triggerTopic) {
-      triggerTopic.setValue(true);
-      setTimeout(() => triggerTopic.setValue(false), 200); // Trigger for 200ms
-    }
-  };
+  if (triggerTopic) {
+    triggerTopic.setValue(true);
+    setTimeout(() => triggerTopic.setValue(false), 200);
+  }
+};
 
-  const handleAimRobot = () => {
-    handleRobotAction(aimToWaypointXTopicRef.current, aimToWaypointYTopicRef.current, aimToWaypointTriggerTopicRef.current);
-  };
 
-  const handlePassToWaypoint = () => {
-    handleRobotAction(passToWaypointXTopicRef.current, passToWaypointYTopicRef.current, passToWaypointTriggerTopicRef.current);
-  };
+const handleAimRobot = () => {
+  const wp = getWaypointByType(WaypointType.Aim);
+  if (!wp) return;
 
-  const handleMoveToWaypoint = () => {
-    handleRobotAction(moveToWaypointXTopicRef.current, moveToWaypointYTopicRef.current, moveToWaypointTriggerTopicRef.current);
-  };
+  handleRobotAction(
+    aimToWaypointXTopicRef.current,
+    aimToWaypointYTopicRef.current,
+    aimToWaypointTriggerTopicRef.current,
+    wp
+  );
+};
 
-  const hasCurrentWaypoint = waypoints.some(wp => wp.status === 'current');
+
+
+const handlePassToWaypoint = () => {
+  const wp = getWaypointByType(WaypointType.Shoot);
+  if (!wp) return;
+
+  handleRobotAction(
+    passToWaypointXTopicRef.current,
+    passToWaypointYTopicRef.current,
+    passToWaypointTriggerTopicRef.current,
+    wp
+  );
+};
+
+
+const handleMoveToWaypoint = () => {
+  const wp = getWaypointByType(WaypointType.Move);
+  if (!wp) return;
+
+  handleRobotAction(
+    moveToWaypointXTopicRef.current,
+    moveToWaypointYTopicRef.current,
+    moveToWaypointTriggerTopicRef.current,
+    wp
+  );
+};
+
+
 
   return (
     <div>
@@ -240,38 +280,28 @@ const Field: React.FC = () => {
       </div>
       <div className="flex gap-4 mt-4">
         <button
-          onClick={handleLockPose}
-          disabled={!hasCurrentWaypoint}
-          className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
-        >
-          Lock Pose
-        </button>
-        <button
-          onClick={handleClearWaypoints}
-          className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700"
-        >
-          Remove All Waypoints
-        </button>
-        <button
           onClick={handleAimRobot}
-          disabled={selectedWaypointIndex === null || waypoints[selectedWaypointIndex]?.status !== 'locked'}
+          disabled={!getWaypointByType(WaypointType.Aim)}
           className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
-          Aim Robot at Locked Waypoint
+          Aim Robot at Aim Waypoint
         </button>
+
+
         <button
           onClick={handlePassToWaypoint}
-          disabled={selectedWaypointIndex === null || waypoints[selectedWaypointIndex]?.status !== 'locked'}
-          className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+          disabled={!getWaypointByType(WaypointType.Shoot)}
+           className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
-          Pass to Selected Waypoint
+          Pass to Shoot Waypoint
         </button>
+
         <button
           onClick={handleMoveToWaypoint}
-          disabled={selectedWaypointIndex === null || waypoints[selectedWaypointIndex]?.status !== 'locked'}
-          className="px-4 py-2 bg-teal-600 text-white font-semibold rounded-lg shadow-md hover:bg-teal-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+          disabled={!getWaypointByType(WaypointType.Move)}
+           className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
-          Move to Selected Waypoint
+          Move to Move Waypoint
         </button>
       </div>
 
@@ -313,3 +343,7 @@ const Field: React.FC = () => {
 };
 
 export default Field;
+function $state() {
+  throw new Error('Function not implemented.');
+}
+
