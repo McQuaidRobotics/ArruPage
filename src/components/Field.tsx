@@ -5,7 +5,15 @@ import { NetworkTablesTopic, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 // A palette of distinct colors for locked waypoints
 const WAYPOINT_COLORS = ['#00FF00', '#00FFFF', '#FFA500', '#FF00FF', '#FFFF00', '#FFFFFF']; // Lime, Aqua, Orange, Fuchsia, Yellow, White
-enum WaypointType { Aim = "AIM", Shoot = "SHOOT", Move = "MOVE" }
+
+export const WaypointType = {
+  Aim: 'Aim',
+  Shoot: 'Shoot',
+  Move: 'Move',
+  General: 'General',
+} as const;
+
+export type WaypointType = (typeof WaypointType)[keyof typeof WaypointType];
 
 type Waypoint = {
   status: "current" | "locked";
@@ -15,9 +23,6 @@ type Waypoint = {
   type: WaypointType;
 };
 
-
-
-
 const Field: React.FC = () => {
   const { nt, connected } = useNetworkTables();
   const imageRef = useRef<HTMLImageElement>(null);
@@ -25,92 +30,97 @@ const Field: React.FC = () => {
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [selectedWaypointIndex, setSelectedWaypointIndex] = useState<number | null>(null);
 
-      // Refs to hold the NetworkTables topics
-      const waypointsTopicRef = useRef<NetworkTablesTopic<string> | null>(null);
-      const clickXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const clickYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      // New topics for robot actions
-      const aimToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const aimToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const aimToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
+  // Refs to hold the NetworkTables topics
+  const waypointsTopicRef = useRef<NetworkTablesTopic<string> | null>(null);
+  const clickXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
+  const clickYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
   
-      const passToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const passToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const passToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
-  
-      const moveToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const moveToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const moveToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
-  
-      const fieldLengthFeet = 57.5; // X-axis
-      const fieldWidthFeet = 26.4;  // Y-axis
-  
-      // Effect to set up NetworkTables topics
-      useEffect(() => {
-        if (!nt || !connected) return;
-  
-        // Create topics and store them in refs
-        waypointsTopicRef.current = nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString);
-        clickXTopicRef.current = nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble);
-        clickYTopicRef.current = nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble);
-        
-        // Initialize new action topics
-        aimToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/aimWaypointX', NetworkTablesTypeInfos.kDouble);
-        aimToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/aimWaypointY', NetworkTablesTypeInfos.kDouble);
-        aimToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/aimTrigger', NetworkTablesTypeInfos.kBoolean);
-        
-        passToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble);
-        passToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble);
-        passToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean);
-        
-        moveToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble);
-        moveToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble);
-        moveToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean);
-        
-        // Asynchronously publish the topics
-        const publishTopics = async () => {
-          try {
-            await waypointsTopicRef.current?.publish();
-            await clickXTopicRef.current?.publish();
-            await clickYTopicRef.current?.publish();
-            
-            await aimToWaypointXTopicRef.current?.publish();
-            await aimToWaypointYTopicRef.current?.publish();
-            await aimToWaypointTriggerTopicRef.current?.publish();
-            
-            await passToWaypointXTopicRef.current?.publish();
-            await passToWaypointYTopicRef.current?.publish();
-            await passToWaypointTriggerTopicRef.current?.publish();
-            
-            await moveToWaypointXTopicRef.current?.publish();
-            await moveToWaypointYTopicRef.current?.publish();
-            await moveToWaypointTriggerTopicRef.current?.publish();
-          } catch (e) {
-            console.error("Failed to publish field topics:", e);
-          }
-        };
-        
-        publishTopics();
-  
-        return () => {
-          waypointsTopicRef.current?.unpublish();
-          clickXTopicRef.current?.unpublish();
-          clickYTopicRef.current?.unpublish();
-  
-          aimToWaypointXTopicRef.current?.unpublish();
-          aimToWaypointYTopicRef.current?.unpublish();
-          aimToWaypointTriggerTopicRef.current?.unpublish();
-  
-          passToWaypointXTopicRef.current?.unpublish();
-          passToWaypointYTopicRef.current?.unpublish();
-          passToWaypointTriggerTopicRef.current?.unpublish();
-  
-          moveToWaypointXTopicRef.current?.unpublish();
-          moveToWaypointYTopicRef.current?.unpublish();
-          moveToWaypointTriggerTopicRef.current?.unpublish();
-        };
-      }, [nt, connected]);
+  // New topics for robot actions
+  const aimToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
+  const aimToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
+  const aimToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
+
+  const passToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
+  const passToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
+  const passToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
+
+  const moveToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
+  const moveToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
+  const moveToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
+
+  const fieldLengthFeet = 57.5; // X-axis
+  const fieldWidthFeet = 26.4;  // Y-axis
+
+  const getWaypointByType = (type: WaypointType) => {
+    return waypoints.find(wp => wp.type === type);
+  };
+
+  // Effect to set up NetworkTables topics
+  useEffect(() => {
+    if (!nt || !connected) return;
+
+    // Create topics and store them in refs
+    waypointsTopicRef.current = nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString);
+    clickXTopicRef.current = nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble);
+    clickYTopicRef.current = nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble);
     
+    // Initialize new action topics
+    aimToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/aimWaypointX', NetworkTablesTypeInfos.kDouble);
+    aimToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/aimWaypointY', NetworkTablesTypeInfos.kDouble);
+    aimToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/aimTrigger', NetworkTablesTypeInfos.kBoolean);
+    
+    passToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble);
+    passToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble);
+    passToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean);
+    
+    moveToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble);
+    moveToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble);
+    moveToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean);
+    
+    // Asynchronously publish the topics
+    const publishTopics = async () => {
+      try {
+        await waypointsTopicRef.current?.publish();
+        await clickXTopicRef.current?.publish();
+        await clickYTopicRef.current?.publish();
+        
+        await aimToWaypointXTopicRef.current?.publish();
+        await aimToWaypointYTopicRef.current?.publish();
+        await aimToWaypointTriggerTopicRef.current?.publish();
+        
+        await passToWaypointXTopicRef.current?.publish();
+        await passToWaypointYTopicRef.current?.publish();
+        await passToWaypointTriggerTopicRef.current?.publish();
+        
+        await moveToWaypointXTopicRef.current?.publish();
+        await moveToWaypointYTopicRef.current?.publish();
+        await moveToWaypointTriggerTopicRef.current?.publish();
+      } catch (e) {
+        console.error("Failed to publish field topics:", e);
+      }
+    };
+    
+    publishTopics();
+
+    return () => {
+      waypointsTopicRef.current?.unpublish();
+      clickXTopicRef.current?.unpublish();
+      clickYTopicRef.current?.unpublish();
+
+      aimToWaypointXTopicRef.current?.unpublish();
+      aimToWaypointYTopicRef.current?.unpublish();
+      aimToWaypointTriggerTopicRef.current?.unpublish();
+
+      passToWaypointXTopicRef.current?.unpublish();
+      passToWaypointYTopicRef.current?.unpublish();
+      passToWaypointTriggerTopicRef.current?.unpublish();
+
+      moveToWaypointXTopicRef.current?.unpublish();
+      moveToWaypointYTopicRef.current?.unpublish();
+      moveToWaypointTriggerTopicRef.current?.unpublish();
+    };
+  }, [nt, connected]);
+
   // Effect to get image dimensions for coordinate scaling
   useEffect(() => {
     const updateDimensions = () => {
@@ -133,7 +143,7 @@ const Field: React.FC = () => {
   useEffect(() => {
     const lockedWaypoints = waypoints
       .filter(wp => wp.status === 'locked')
-      .map(wp => ({ pose: wp.pose, color: wp.color }));
+      .map(wp => ({ pose: wp.pose, color: wp.color, type: wp.type }));
       
     waypointsTopicRef.current?.setValue(JSON.stringify(lockedWaypoints));
   }, [waypoints]);
@@ -149,107 +159,75 @@ const Field: React.FC = () => {
     
     const pose = { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)) };
 
-    const newWaypoint: Waypoint = {
-      pixel: { x: clickXInPixels, y: clickYInPixels },
-      pose: pose,
-      status: 'current',
-      color: 'red',
-    };
-    setWaypoints(prev => [...prev.filter(wp => wp.status !== 'current'), newWaypoint]);
-    
-    // Update the single-click topics
+    // Update click topics
     clickXTopicRef.current?.setValue(pose.x);
     clickYTopicRef.current?.setValue(pose.y);
-  };
 
-function getWaypointByType(type: WaypointType) {
-  return waypoints.find(wp => wp.type === type && wp.status === "locked") || null;
-}
-
-
- 
-function createWaypoint(type: WaypointType, pose) {
-  setWaypoints(prev => {k
-    const lockedCount = prev.filter(wp => wp.status === "locked").length;
-    const nextColor = WAYPOINT_COLORS[lockedCount % WAYPOINT_COLORS.length];
-
-    // Remove old waypoint of this type
-    const withoutOld = prev.filter(wp => wp.type !== type);
+    // Determine type by cycling or some other logic
+    const types = [WaypointType.Aim, WaypointType.Shoot, WaypointType.Move];
+    const type = types[waypoints.length % types.length];
 
     const newWaypoint: Waypoint = {
-      status: "locked",
+      status: 'locked',
       pose,
-      pixel: convertFieldToPixel(pose),
-      color: nextColor,
-      type
+      pixel: { x: clickXInPixels, y: clickYInPixels },
+      color: WAYPOINT_COLORS[waypoints.length % WAYPOINT_COLORS.length],
+      type: type
     };
 
-    return [...withoutOld, newWaypoint];
-  });
-}
-
-
-
-
-
-
+    setWaypoints(prev => [...prev, newWaypoint]);
+  };
 
   const handleRobotAction = (
-  xTopic: NetworkTablesTopic<number> | null,
-  yTopic: NetworkTablesTopic<number> | null,
-  triggerTopic: NetworkTablesTopic<boolean> | null,
-  waypoint: Waypoint
-) => {
-  if (xTopic) xTopic.setValue(waypoint.pose.x);
-  if (yTopic) yTopic.setValue(waypoint.pose.y);
+    xTopic: NetworkTablesTopic<number> | null,
+    yTopic: NetworkTablesTopic<number> | null,
+    triggerTopic: NetworkTablesTopic<boolean> | null,
+    waypoint: Waypoint
+  ) => {
+    if (xTopic) xTopic.setValue(waypoint.pose.x);
+    if (yTopic) yTopic.setValue(waypoint.pose.y);
 
-  if (triggerTopic) {
-    triggerTopic.setValue(true);
-    setTimeout(() => triggerTopic.setValue(false), 200);
-  }
-};
+    if (triggerTopic) {
+      triggerTopic.setValue(true);
+      setTimeout(() => triggerTopic.setValue(false), 200);
+    }
+  };
 
+  const handleAimRobot = () => {
+    const wp = getWaypointByType(WaypointType.Aim);
+    if (!wp) return;
 
-const handleAimRobot = () => {
-  const wp = getWaypointByType(WaypointType.Aim);
-  if (!wp) return;
+    handleRobotAction(
+      aimToWaypointXTopicRef.current,
+      aimToWaypointYTopicRef.current,
+      aimToWaypointTriggerTopicRef.current,
+      wp
+    );
+  };
 
-  handleRobotAction(
-    aimToWaypointXTopicRef.current,
-    aimToWaypointYTopicRef.current,
-    aimToWaypointTriggerTopicRef.current,
-    wp
-  );
-};
+  const handlePassToWaypoint = () => {
+    const wp = getWaypointByType(WaypointType.Shoot);
+    if (!wp) return;
 
+    handleRobotAction(
+      passToWaypointXTopicRef.current,
+      passToWaypointYTopicRef.current,
+      passToWaypointTriggerTopicRef.current,
+      wp
+    );
+  };
 
+  const handleMoveToWaypoint = () => {
+    const wp = getWaypointByType(WaypointType.Move);
+    if (!wp) return;
 
-const handlePassToWaypoint = () => {
-  const wp = getWaypointByType(WaypointType.Shoot);
-  if (!wp) return;
-
-  handleRobotAction(
-    passToWaypointXTopicRef.current,
-    passToWaypointYTopicRef.current,
-    passToWaypointTriggerTopicRef.current,
-    wp
-  );
-};
-
-
-const handleMoveToWaypoint = () => {
-  const wp = getWaypointByType(WaypointType.Move);
-  if (!wp) return;
-
-  handleRobotAction(
-    moveToWaypointXTopicRef.current,
-    moveToWaypointYTopicRef.current,
-    moveToWaypointTriggerTopicRef.current,
-    wp
-  );
-};
-
-
+    handleRobotAction(
+      moveToWaypointXTopicRef.current,
+      moveToWaypointYTopicRef.current,
+      moveToWaypointTriggerTopicRef.current,
+      wp
+    );
+  };
 
   return (
     <div>
@@ -287,7 +265,6 @@ const handleMoveToWaypoint = () => {
           Aim Robot at Aim Waypoint
         </button>
 
-
         <button
           onClick={handlePassToWaypoint}
           disabled={!getWaypointByType(WaypointType.Shoot)}
@@ -307,7 +284,7 @@ const handleMoveToWaypoint = () => {
 
       {selectedWaypointIndex !== null && waypoints[selectedWaypointIndex]?.status === 'locked' && (
         <div className="mt-6 p-4 bg-gray-700 rounded-lg">
-          <h3 className="text-xl font-semibold text-gray-200 mb-2">Selected Locked Waypoint:</h3>
+          <h3 className="text-xl font-semibold text-gray-200 mb-2">Selected Locked Waypoint ({waypoints[selectedWaypointIndex].type}):</h3>
           <p className="text-gray-300">
             X: {waypoints[selectedWaypointIndex].pose.x.toFixed(2)} ft,
             Y: {waypoints[selectedWaypointIndex].pose.y.toFixed(2)} ft
@@ -332,7 +309,7 @@ const handleMoveToWaypoint = () => {
             {waypoints.filter(wp => wp.status === 'locked').map((wp, index) => (
               <li key={index} className="flex items-center text-gray-300">
                 <span style={{ backgroundColor: wp.color }} className="w-4 h-4 rounded-full mr-2 border border-gray-400"></span>
-                <span>X: {wp.pose.x.toFixed(2)} ft, Y: {wp.pose.y.toFixed(2)} ft</span>
+                <span>[{wp.type}] X: {wp.pose.x.toFixed(2)} ft, Y: {wp.pose.y.toFixed(2)} ft</span>
               </li>
             ))}
           </ul>
@@ -343,7 +320,3 @@ const handleMoveToWaypoint = () => {
 };
 
 export default Field;
-function $state() {
-  throw new Error('Function not implemented.');
-}
-
