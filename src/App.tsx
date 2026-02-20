@@ -6,6 +6,8 @@ import { NTNumberReadout } from './components/NTNumberReadout';
 import { NTSlider } from './components/NTSlider';
 import { NTClock } from './components/NTClock';
 import Field from './components/Field';
+import MapPage from './map/map';
+import { useState } from 'react';
 
 const ConnectionStatus = () => {
   const { connected } = useNetworkTables();
@@ -18,10 +20,17 @@ const ConnectionStatus = () => {
   );
 };
 
-function Dashboard() {
+function Dashboard({ goToMap }: { goToMap: () => void }) {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <ConnectionStatus />
+
+      <div className="absolute top-4 left-4 flex items-center gap-2">
+        <button onClick={goToMap} className="px-3 py-1 bg-gray-800/70 hover:bg-gray-700 rounded-md text-sm">Map</button>
+        <div className="ml-2">
+          <p className="text-sm text-gray-400">Team 3173</p>
+        </div>
+      </div>
       
       <header className="mb-8 flex flex-col items-center text-center">
         <h1 className="text-2xl font-bold text-gray-500 uppercase tracking-tighter">FRC Dashboard 2026</h1>
@@ -81,10 +90,15 @@ function Dashboard() {
 
 function App() {
   const robotIp = '127.0.0.1'; 
+  const [page, setPage] = useState<'dashboard' | 'map'>('dashboard');
 
   return (
     <NetworkTablesProvider robotIp={robotIp}>
-      <Dashboard />
+      {page === 'dashboard' ? (
+        <Dashboard goToMap={() => { setPage('map'); window.history.pushState({}, '', '/map'); }} />
+      ) : (
+        <MapPage onBack={() => { setPage('dashboard'); window.history.back(); }} />
+      )}
     </NetworkTablesProvider>
   );
 }

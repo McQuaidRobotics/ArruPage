@@ -108,10 +108,45 @@ const Field: React.FC = () => {
     
     publishTopics();
 
+    // Subscribe to remote waypoints if the simulation publishes them
+    let subuid: number | undefined;
+    try {
+      if (waypointsTopicRef.current) {
+        subuid = waypointsTopicRef.current.subscribe((val) => {
+          if (!val) return;
+          try {
+            const parsed = JSON.parse(val) as Array<any>;
+            const mapped: Waypoint[] = parsed.map((p) => {
+              const pose = p.pose ?? { x: 0, y: 0 };
+              const pixel = renderedImageDimensions
+                ? { x: (pose.x / fieldLengthFeet) * renderedImageDimensions.width, y: (pose.y / fieldWidthFeet) * renderedImageDimensions.height }
+                : { x: 0, y: 0 };
+              return {
+                status: 'locked',
+                pose,
+                pixel,
+                color: p.color ?? WAYPOINT_COLORS.General,
+                type: p.type ?? WaypointType.General,
+              };
+            });
+            setWaypoints(mapped);
+          } catch (e) {
+            console.error('Failed to parse remote waypoints', e);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Could not subscribe to remote waypoints', e);
+    }
+
     return () => {
       waypointsTopicRef.current?.unpublish();
       clickXTopicRef.current?.unpublish();
       clickYTopicRef.current?.unpublish();
+
+      if (subuid !== undefined) {
+        waypointsTopicRef.current?.unsubscribe(subuid);
+      }
 
       aimToWaypointXTopicRef.current?.unpublish();
       aimToWaypointYTopicRef.current?.unpublish();
