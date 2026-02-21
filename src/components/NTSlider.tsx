@@ -39,7 +39,7 @@ export const NTSlider: React.FC<NTSliderProps> = ({
                     setValue(ntTopic.getValue() as number);
                 }
                 return;
-            } catch (_err) {
+            } catch {
                 attempts++;
                 await new Promise(r => setTimeout(r, 1000));
             }

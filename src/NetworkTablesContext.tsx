@@ -6,6 +6,7 @@ interface NetworkTablesContextType {
   connected: boolean;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const NTContext = createContext<NetworkTablesContextType>({ nt: null, connected: false });
 
 export const NetworkTablesProvider: React.FC<{ children: React.ReactNode; robotIp: string }> = ({ children, robotIp }) => {

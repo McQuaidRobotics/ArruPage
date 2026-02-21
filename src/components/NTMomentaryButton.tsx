@@ -26,7 +26,7 @@ export const NTMomentaryButton: React.FC<NTMomentaryButtonProps> = ({ topic, lab
                 ntTopic.setValue(false);
                 setPressed(false);
                 return;
-            } catch (_err) {
+            } catch {
                 attempts++;
                 await new Promise(r => setTimeout(r, 1000));
             }
