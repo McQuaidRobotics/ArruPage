@@ -6,6 +6,7 @@ import { NTNumberReadout } from './components/NTNumberReadout';
 import { NTSlider } from './components/NTSlider';
 import { NTClock } from './components/NTClock';
 import MapPage from './map/map';
+import ClimbPage from './climb/ClimbPage';
 import { useState, useEffect } from 'react';
 
 const ConnectionStatus = () => {
@@ -19,13 +20,14 @@ const ConnectionStatus = () => {
   );
 };
 
-function Dashboard({ goToMap }: { goToMap: () => void }) {
+function Dashboard({ goToMap, goToClimb }: { goToMap: () => void, goToClimb: () => void }) {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 relative overflow-auto">
       <ConnectionStatus />
 
       <div className="absolute top-4 left-4 flex items-center gap-2 z-50">
-        <button onClick={goToMap} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold transition-all active:scale-95 shadow-lg">Open Map</button>
+        <button onClick={goToMap} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold transition-all active:scale-95 shadow-lg mr-2">Open Map</button>
+        <button onClick={goToClimb} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-bold transition-all active:scale-95 shadow-lg">Open Climb</button>
         <div className="ml-2">
           <p className="text-sm text-gray-400 font-mono">Team 3173</p>
         </div>
@@ -84,15 +86,19 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
 
 function App() {
   const robotIp = '127.0.0.1'; 
-  const [page, setPage] = useState<'dashboard' | 'map'>(() => {
-    return window.location.pathname === '/map' ? 'map' : 'dashboard';
+  const [page, setPage] = useState<'dashboard' | 'map' | 'climb'>(() => {
+    if (window.location.pathname === '/map') return 'map';
+    if (window.location.pathname === '/climb') return 'climb';
+    return 'dashboard';
   });
 
   // Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = () => {
-      const isMap = window.location.pathname === '/map';
-      setPage(isMap ? 'map' : 'dashboard');
+      const path = window.location.pathname;
+      if (path === '/map') setPage('map');
+      else if (path === '/climb') setPage('climb');
+      else setPage('dashboard');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -103,23 +109,33 @@ function App() {
     window.history.pushState({}, '', '/map');
   };
 
+  const goToClimb = () => {
+    setPage('climb');
+    window.history.pushState({}, '', '/climb');
+  };
+
   const goBack = () => {
     setPage('dashboard');
-    if (window.location.pathname === '/map') {
-      window.history.back();
-    } else {
+    if (window.location.pathname === '/map' || window.location.pathname === '/climb') {
       window.history.pushState({}, '', '/');
+    }
+  };
+
+  const renderPage = () => {
+    switch (page) {
+      case 'map':
+        return <MapPage onBack={goBack} />;
+      case 'climb':
+        return <ClimbPage onBack={goBack} />;
+      default:
+        return <Dashboard goToMap={goToMap} goToClimb={goToClimb} />;
     }
   };
 
   return (
     <NetworkTablesProvider robotIp={robotIp}>
       <div className="min-h-screen bg-gray-900 overflow-hidden">
-        {page === 'dashboard' ? (
-          <Dashboard goToMap={goToMap} />
-        ) : (
-          <MapPage onBack={goBack} />
-        )}
+        {renderPage()}
       </div>
     </NetworkTablesProvider>
   );
