@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import fieldImage from '../assets/2026 FRC.png';
-import { useNetworkTables } from '../NetworkTablesContext';
+import { useNetworkTables } from '../useNetworkTables';
 import { NetworkTablesTopic, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 // A palette of distinct colors for locked waypoints

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNetworkTables } from '../NetworkTablesContext';
+import { useNetworkTables } from '../useNetworkTables';
 import { NetworkTablesTypeInfos, NetworkTablesTopic } from 'ntcore-ts-client';
 
 interface NTMomentaryButtonProps {
@@ -26,7 +26,7 @@ export const NTMomentaryButton: React.FC<NTMomentaryButtonProps> = ({ topic, lab
                 ntTopic.setValue(false);
                 setPressed(false);
                 return;
-            } catch (err) {
+            } catch (_err) {
                 attempts++;
                 await new Promise(r => setTimeout(r, 1000));
             }

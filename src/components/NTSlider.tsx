@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNetworkTables } from '../NetworkTablesContext';
+import { useNetworkTables } from '../useNetworkTables';
 import { NetworkTablesTypeInfos, NetworkTablesTopic } from 'ntcore-ts-client';
 
 interface NTSliderProps {
@@ -39,7 +39,7 @@ export const NTSlider: React.FC<NTSliderProps> = ({
                     setValue(ntTopic.getValue() as number);
                 }
                 return;
-            } catch (err) {
+            } catch (_err) {
                 attempts++;
                 await new Promise(r => setTimeout(r, 1000));
             }

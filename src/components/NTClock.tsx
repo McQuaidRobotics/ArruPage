@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from "react";
-import { useNetworkTables } from "../NetworkTablesContext";
+import { useNetworkTables } from "../useNetworkTables";
 import { NetworkTablesTypeInfos } from "ntcore-ts-client";
 
 interface NTClockProps {
@@ -22,17 +22,11 @@ export const NTClock: React.FC<NTClockProps> = ({ topic, label }) => {
 
         const timeSubber = timeNtTopic.subscribe((timeValue) => {
             if (timeValue !== null) setTime(timeValue);
-        });
+        }, true);
 
         const modeSubber = modeNtTopic.subscribe((modeValue) => {
             if (modeValue !== null && modeValue !== "") setMode(modeValue);
-        });
-
-        // Pull current values immediately if they already exist in the cache
-        const initialTime = timeNtTopic.getValue();
-        const initialMode = modeNtTopic.getValue();
-        if (initialTime !== null) setTime(initialTime);
-        if (initialMode !== null && initialMode !== "") setMode(initialMode);
+        }, true);
 
         return () => {
             timeNtTopic.unsubscribe(timeSubber);

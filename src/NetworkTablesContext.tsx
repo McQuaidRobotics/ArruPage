@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useEffect, useState, useMemo } from 'react';
 import { NetworkTables } from 'ntcore-ts-client';
 
 interface NetworkTablesContextType {
@@ -6,27 +6,24 @@ interface NetworkTablesContextType {
   connected: boolean;
 }
 
-const NTContext = createContext<NetworkTablesContextType>({ nt: null, connected: false });
+export const NTContext = createContext<NetworkTablesContextType>({ nt: null, connected: false });
 
 export const NetworkTablesProvider: React.FC<{ children: React.ReactNode; robotIp: string }> = ({ children, robotIp }) => {
-  const [nt, setNt] = useState<NetworkTables | null>(null);
+  const nt = useMemo(() => NetworkTables.getInstanceByURI(robotIp), [robotIp]);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const client = NetworkTables.getInstanceByURI(robotIp);
-    
     const onConnectionChanged = (isConnected: boolean) => {
       setConnected(isConnected);
     };
 
     // addRobotConnectionListener returns an unsubscribe function
-    const unsubscribe = client.addRobotConnectionListener(onConnectionChanged, true);
-    setNt(client);
+    const unsubscribe = nt.addRobotConnectionListener(onConnectionChanged, true);
 
     return () => {
       unsubscribe();
     };
-  }, [robotIp]);
+  }, [nt]);
 
   return (
     <NTContext.Provider value={{ nt, connected }}>
@@ -34,5 +31,3 @@ export const NetworkTablesProvider: React.FC<{ children: React.ReactNode; robotI
     </NTContext.Provider>
   );
 };
-
-export const useNetworkTables = () => useContext(NTContext);
