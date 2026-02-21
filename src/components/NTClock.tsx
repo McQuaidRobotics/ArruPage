@@ -9,7 +9,7 @@ interface NTClockProps {
     precision?: number;
 }
 
-export const NTClock: React.FC<NTClockProps> = ({ topic, label, unit = '', precision = 2 }) => {
+export const NTClock: React.FC<NTClockProps> = ({ topic, label }) => {
     const {nt} = useNetworkTables();
     const [time, setTime] = useState<number>(0);
     const [mode, setMode] = useState<string>("disabled");

@@ -6,7 +6,7 @@ import { NTNumberReadout } from './components/NTNumberReadout';
 import { NTSlider } from './components/NTSlider';
 import { NTClock } from './components/NTClock';
 import MapPage from './map/map';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const ConnectionStatus = () => {
   const { connected } = useNetworkTables();
@@ -21,11 +21,11 @@ const ConnectionStatus = () => {
 
 function Dashboard({ goToMap }: { goToMap: () => void }) {
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-gray-900 text-white p-8 relative">
       <ConnectionStatus />
 
-      <div className="absolute top-4 left-4 flex items-center gap-2">
-        <button onClick={goToMap} className="px-3 py-1 bg-gray-800/70 hover:bg-gray-700 rounded-md text-sm">Map</button>
+      <div className="absolute top-4 left-4 flex items-center gap-2 z-50">
+        <button onClick={goToMap} className="px-3 py-1 bg-gray-800/70 hover:bg-gray-700 rounded-md text-sm transition-colors active:scale-95">Map</button>
         <div className="ml-2">
           <p className="text-sm text-gray-400">Team 3173</p>
         </div>
@@ -84,7 +84,18 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
 
 function App() {
   const robotIp = '127.0.0.1'; 
-  const [page, setPage] = useState<'dashboard' | 'map'>('dashboard');
+  const [page, setPage] = useState<'dashboard' | 'map'>(() => {
+    return window.location.pathname === '/map' ? 'map' : 'dashboard';
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const isMap = window.location.pathname === '/map';
+      setPage(isMap ? 'map' : 'dashboard');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   return (
     <NetworkTablesProvider robotIp={robotIp}>
