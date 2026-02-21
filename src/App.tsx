@@ -1,5 +1,6 @@
 
-import { NetworkTablesProvider, useNetworkTables } from './NetworkTablesContext';
+import { NetworkTablesProvider } from './NetworkTablesContext';
+import { useNetworkTables } from './useNetworkTables';
 import { NTButton } from './components/NTButton';
 import { NTMomentaryButton } from './components/NTMomentaryButton';
 import { NTNumberReadout } from './components/NTNumberReadout';
