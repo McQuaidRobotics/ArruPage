@@ -5,7 +5,6 @@ import { NTMomentaryButton } from './components/NTMomentaryButton';
 import { NTNumberReadout } from './components/NTNumberReadout';
 import { NTSlider } from './components/NTSlider';
 import { NTClock } from './components/NTClock';
-import Field from './components/Field';
 import MapPage from './map/map';
 import { useState } from 'react';
 
@@ -77,11 +76,6 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 border-dashed flex items-center justify-center">
             <p className="text-gray-500 text-center">Additional robot configuration</p>
           </div>
-        </div>
-
-        {/* Field */}
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-          <Field />
         </div>
       </main>
     </div>
