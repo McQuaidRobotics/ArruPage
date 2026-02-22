@@ -22,11 +22,11 @@ export const NTClock: React.FC<NTClockProps> = ({ topic, label }) => {
 
         const timeSubber = timeNtTopic.subscribe((timeValue) => {
             if (timeValue !== null) setTime(timeValue);
-        }, true);
+        });
 
         const modeSubber = modeNtTopic.subscribe((modeValue) => {
             if (modeValue !== null && modeValue !== "") setMode(modeValue);
-        }, true);
+        });
 
         return () => {
             timeNtTopic.unsubscribe(timeSubber);

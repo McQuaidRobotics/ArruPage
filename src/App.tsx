@@ -6,7 +6,6 @@ import { NTNumberReadout } from './components/NTNumberReadout';
 import { NTSlider } from './components/NTSlider';
 import { NTClock } from './components/NTClock';
 import MapPage from './map/map';
-import ClimbPage from './climb/ClimbPage';
 import { useState, useEffect } from 'react';
 
 const ConnectionStatus = () => {
@@ -20,14 +19,13 @@ const ConnectionStatus = () => {
   );
 };
 
-function Dashboard({ goToMap, goToClimb }: { goToMap: () => void, goToClimb: () => void }) {
+function Dashboard({ goToMap }: { goToMap: () => void }) {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 relative overflow-auto">
       <ConnectionStatus />
 
       <div className="absolute top-4 left-4 flex items-center gap-2 z-50">
         <button onClick={goToMap} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold transition-all active:scale-95 shadow-lg mr-2">Open Map</button>
-        <button onClick={goToClimb} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-bold transition-all active:scale-95 shadow-lg">Open Climb</button>
         <div className="ml-2">
           <p className="text-sm text-gray-400 font-mono">Team 3173</p>
         </div>
@@ -50,6 +48,17 @@ function Dashboard({ goToMap, goToClimb }: { goToMap: () => void, goToClimb: () 
             <div className="flex flex-col gap-4">
               <NTButton topic="/dashboard/intake" label="Intake" initialValue={true} />
               <NTButton topic="/dashboard/shooter" label="Shooter" initialValue={true} />
+            </div>
+          </div>
+
+          {/* Climb Controls */}
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
+            <h2 className="text-xl font-bold mb-4 text-purple-400 uppercase tracking-wider">Climb Controls</h2>
+            <div className="flex flex-col gap-4">
+              <NTMomentaryButton topic="/dashboard/climb/level" label="L1" sendValue="L1" />
+              <NTMomentaryButton topic="/dashboard/climb/level" label="L2" sendValue="L2" />
+              <NTMomentaryButton topic="/dashboard/climb/level" label="L3" sendValue="L3" />
+              <NTMomentaryButton topic="/dashboard/climb/lineup" label="Line Up Climb" />
             </div>
           </div>
 
@@ -86,9 +95,8 @@ function Dashboard({ goToMap, goToClimb }: { goToMap: () => void, goToClimb: () 
 
 function App() {
   const robotIp = '127.0.0.1'; 
-  const [page, setPage] = useState<'dashboard' | 'map' | 'climb'>(() => {
+  const [page, setPage] = useState<'dashboard' | 'map'>(() => {
     if (window.location.pathname === '/map') return 'map';
-    if (window.location.pathname === '/climb') return 'climb';
     return 'dashboard';
   });
 
@@ -97,7 +105,6 @@ function App() {
     const handlePopState = () => {
       const path = window.location.pathname;
       if (path === '/map') setPage('map');
-      else if (path === '/climb') setPage('climb');
       else setPage('dashboard');
     };
     window.addEventListener('popstate', handlePopState);
@@ -109,10 +116,7 @@ function App() {
     window.history.pushState({}, '', '/map');
   };
 
-  const goToClimb = () => {
-    setPage('climb');
-    window.history.pushState({}, '', '/climb');
-  };
+
 
   const goBack = () => {
     setPage('dashboard');
@@ -125,10 +129,8 @@ function App() {
     switch (page) {
       case 'map':
         return <MapPage onBack={goBack} />;
-      case 'climb':
-        return <ClimbPage onBack={goBack} />;
       default:
-        return <Dashboard goToMap={goToMap} goToClimb={goToClimb} />;
+        return <Dashboard goToMap={goToMap} />;
     }
   };
 
