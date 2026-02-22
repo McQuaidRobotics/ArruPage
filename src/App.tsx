@@ -1,6 +1,7 @@
 import { NetworkTablesProvider } from './NetworkTablesContext';
 import { useNetworkTables } from './useNetworkTables';
 import { NTButton } from './components/NTButton';
+import { NTRadioButton } from './components/NTRadioButton';
 import { NTMomentaryButton } from './components/NTMomentaryButton';
 import { NTNumberReadout } from './components/NTNumberReadout';
 import { NTSlider } from './components/NTSlider';
@@ -55,9 +56,9 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-purple-400 uppercase tracking-wider">Climb Controls</h2>
             <div className="flex flex-col gap-4">
-              <NTButton topic="/dashboard/climb/l1" label="L1" />
-              <NTButton topic="/dashboard/climb/l2" label="L2" />
-              <NTButton topic="/dashboard/climb/l3" label="L3" />
+              <NTRadioButton topic="/dashboard/climb/level" label="L1" value="L1" />
+              <NTRadioButton topic="/dashboard/climb/level" label="L2" value="L2" />
+              <NTRadioButton topic="/dashboard/climb/level" label="L3" value="L3" />
               <NTMomentaryButton topic="/dashboard/climb/lineup" label="Line Up Climb" />
             </div>
           </div>
