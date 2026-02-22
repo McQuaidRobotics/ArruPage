@@ -75,9 +75,9 @@ export const NTMomentaryButton: React.FC<NTMomentaryButtonProps> = ({ topic, lab
       onTouchEnd={handleRelease}
       className={`px-4 py-2 rounded-lg font-bold transition-all ${
         (pressed && sendValue === undefined) // Only 'pressed' style for boolean momentary
-          ? 'bg-blue-700 text-white scale-95 shadow-inner' 
-          : 'bg-blue-600 text-white shadow-lg border-2 border-white/10'
-      } hover:opacity-80 active:scale-95 w-full select-none`}
+          ? 'bg-yellow-500 text-black scale-95 shadow-inner' 
+          : 'bg-gray-700 text-white shadow-lg border-2 border-white/5'
+      } w-full select-none`}
     >
       {label} {(pressed && sendValue === undefined) ? '(HOLDING)' : ''}
     </button>

@@ -55,9 +55,9 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-purple-400 uppercase tracking-wider">Climb Controls</h2>
             <div className="flex flex-col gap-4">
-              <NTMomentaryButton topic="/dashboard/climb/level" label="L1" sendValue="L1" />
-              <NTMomentaryButton topic="/dashboard/climb/level" label="L2" sendValue="L2" />
-              <NTMomentaryButton topic="/dashboard/climb/level" label="L3" sendValue="L3" />
+              <NTButton topic="/dashboard/climb/l1" label="L1" />
+              <NTButton topic="/dashboard/climb/l2" label="L2" />
+              <NTButton topic="/dashboard/climb/l3" label="L3" />
               <NTMomentaryButton topic="/dashboard/climb/lineup" label="Line Up Climb" />
             </div>
           </div>
@@ -79,14 +79,13 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
               <NTNumberReadout topic="/dashboard/time" label="Match Time" unit="s" precision={0} />
             </div>
           </div>
+
+          <NTSlider topic="/dashboard/detune" label="Drive Detune" min={0} max={1} step={0.05} />
         </div>
 
         {/* Settings Area */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <NTSlider topic="/dashboard/detune" label="Drive Detune" min={0} max={1} step={0.05} />
-          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 border-dashed flex items-center justify-center">
-            <p className="text-gray-500 text-center font-medium">Additional robot configuration available in the driver station</p>
-          </div>
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 border-dashed flex items-center justify-center">
+          <p className="text-gray-500 text-center font-medium">Additional robot configuration available in the driver station</p>
         </div>
       </main>
     </div>
