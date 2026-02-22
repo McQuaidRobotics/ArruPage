@@ -21,12 +21,33 @@ export const NTRadioButton: React.FC<NTRadioButtonProps> = ({ topic, label, valu
     ntTopicRef.current = ntTopic;
 
     const setup = async () => {
-      await ntTopic.publish();
-      if (ntTopic.getValue() === null) {
-        ntTopic.setValue(offValue);
-      } else {
-        setCurrentValue(ntTopic.getValue() as string);
-      }
+        // Stagger the initial start to avoid overwhelming the server
+        await new Promise(r => setTimeout(r, Math.random() * 1000));
+
+        let attempts = 0;
+        const maxAttempts = 3;
+
+        while (attempts < maxAttempts) {
+            try {
+                await ntTopic.publish();
+                
+                // If we reach here, publish succeeded
+                if (ntTopic.getValue() === null) {
+                    ntTopic.setValue(offValue);
+                } else {
+                    setCurrentValue(ntTopic.getValue() as string);
+                }
+                return; // Exit success
+            } catch (err) {
+                attempts++;
+                console.warn(`Publish attempt ${attempts} failed for ${topic}. Retrying...`);
+                if (attempts === maxAttempts) {
+                    console.error(`Failed to publish ${topic} after ${maxAttempts} tries:`, err);
+                } else {
+                    await new Promise(r => setTimeout(r, 1000)); // Wait before retry
+                }
+            }
+        }
     };
 
     setup();
