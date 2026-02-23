@@ -28,11 +28,13 @@ type Waypoint = {
 const Field: React.FC = () => {
   const { nt, connected } = useNetworkTables();
   const imageRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [selectedWaypointIndex, setSelectedWaypointIndex] = useState<number | null>(null);
   const [settingType, setSettingType] = useState<WaypointType | null>(null);
   const [activeActions, setActiveActions] = useState<{ [key: string]: boolean }>({});
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const fieldLengthFeet = 57.5; // X-axis
   const fieldWidthFeet = 26.4;  // Y-axis
@@ -159,16 +161,24 @@ const Field: React.FC = () => {
     }
   }, [waypoints]);
 
-  const handleFieldClick = (event: React.MouseEvent<HTMLImageElement>) => {
-    if (!dimensions || !settingType) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const xPx = event.clientX - rect.left;
-    const yPx = event.clientY - rect.top;
+  const getPoseFromEvent = (clientX: number, clientY: number) => {
+    if (!dimensions || !containerRef.current) return null;
+    const rect = containerRef.current.getBoundingClientRect();
+    const xPx = clientX - rect.left;
+    const yPx = clientY - rect.top;
 
-    const xFeet = (xPx / dimensions.width) * fieldLengthFeet;
-    const yFeet = (yPx / dimensions.height) * fieldWidthFeet;
+    const xFeet = Math.max(0, Math.min(fieldLengthFeet, (xPx / dimensions.width) * fieldLengthFeet));
+    const yFeet = Math.max(0, Math.min(fieldWidthFeet, (yPx / dimensions.height) * fieldWidthFeet));
     
-    const pose = { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
+    return { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
+  };
+
+  const handleFieldClick = (event: React.MouseEvent<HTMLImageElement>) => {
+    if (draggingIndex !== null) return;
+    if (!settingType) return;
+    
+    const pose = getPoseFromEvent(event.clientX, event.clientY);
+    if (!pose) return;
 
     topicsRef.current.clickX?.setValue(pose.x);
     topicsRef.current.clickY?.setValue(pose.y);
@@ -183,6 +193,47 @@ const Field: React.FC = () => {
     setWaypoints(prev => [...prev.filter(wp => wp.type !== settingType), newWaypoint]);
     setSettingType(null);
   };
+
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
+    e.stopPropagation();
+    setDraggingIndex(index);
+    setSelectedWaypointIndex(index);
+  };
+
+  const handleDragMove = (e: MouseEvent | TouchEvent) => {
+    if (draggingIndex === null) return;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+    
+    const pose = getPoseFromEvent(clientX, clientY);
+    if (pose) {
+      setWaypoints(prev => {
+        const next = [...prev];
+        next[draggingIndex] = { ...next[draggingIndex], pose: { ...next[draggingIndex].pose, x: pose.x, y: pose.y } };
+        return next;
+      });
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggingIndex(null);
+  };
+
+  useEffect(() => {
+    if (draggingIndex !== null) {
+      window.addEventListener('mousemove', handleDragMove);
+      window.addEventListener('mouseup', handleDragEnd);
+      window.addEventListener('touchmove', handleDragMove, { passive: false });
+      window.addEventListener('touchend', handleDragEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [draggingIndex]);
 
   const handleExport = () => {
     const moveWp = getWaypointByType(WaypointType.Move);
@@ -240,21 +291,27 @@ const Field: React.FC = () => {
         )}
       </div>
       
-      <div className="relative w-full border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
+      <div ref={containerRef}
+           className="relative w-full border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
            style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
         <img 
-          ref={imageRef} 
-          src={fieldImage} 
-          alt="Field" 
-          onClick={handleFieldClick} 
-          className={`w-full h-full object-contain ${settingType ? 'cursor-crosshair' : ''}`}
-        />
+  ref={imageRef} 
+  src={fieldImage} 
+  alt="Field" 
+  onClick={handleFieldClick} 
+  // 1. This prevents the browser from trying to "drag" the image file
+  draggable="false" 
+  className={`w-full h-full object-contain select-none ${
+    settingType ? 'cursor-crosshair' : ''
+  }`}
+/>
         {waypoints.map((wp, i) => {
           const pixel = poseToPixel(wp.pose);
           return (
             <div key={i} 
-                 onClick={(e) => { e.stopPropagation(); setSelectedWaypointIndex(i); }}
-                 className={`absolute w-5 h-5 rounded-full border-2 cursor-pointer z-10 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
+                 onMouseDown={(e) => handleDragStart(e, i)}
+                 onTouchStart={(e) => handleDragStart(e, i)}
+                 className={`absolute w-6 h-6 rounded-full border-2 cursor-grab active:cursor-grabbing z-20 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
                  style={{ 
                    left: pixel.x, 
                    top: pixel.y, 
