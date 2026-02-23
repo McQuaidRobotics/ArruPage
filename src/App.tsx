@@ -56,9 +56,9 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-purple-400 uppercase tracking-wider">Climb Controls</h2>
             <div className="flex flex-col gap-4">
-              <NTRadioButton topic="/dashboard/climb/level" label="L1" value="L1" />
-              <NTRadioButton topic="/dashboard/climb/level" label="L2" value="L2" />
-              <NTRadioButton topic="/dashboard/climb/level" label="L3" value="L3" />
+              <NTRadioButton topic="/dashboard/climb/stage" label="PREP TO CLIMB" value={0} />
+              <NTRadioButton topic="/dashboard/climb/stage" label="PULL UP" value={1} />
+              <NTRadioButton topic="/dashboard/climb/stage" label="STOW" value={2} />
               <NTMomentaryButton topic="/dashboard/climb/lineup" label="Line Up Climb" />
             </div>
           </div>

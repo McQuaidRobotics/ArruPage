@@ -5,14 +5,12 @@ import { NetworkTablesTopic, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 // A palette of distinct colors for locked waypoints
 const WAYPOINT_COLORS = {
-  Aim: '#FF00FF',   // Fuchsia
-  Shoot: '#00FFFF', // Aqua
+  Shoot: '#FF00FF', // Fuchsia
   Move: '#00FF00',  // Lime
   General: '#FFFF00' // Yellow
 } as const;
 
 export const WaypointType = {
-  Aim: 'Aim',
   Shoot: 'Shoot',
   Move: 'Move',
   General: 'General',
@@ -22,7 +20,7 @@ export type WaypointType = (typeof WaypointType)[keyof typeof WaypointType];
 
 type Waypoint = {
   status: "current" | "locked";
-  pose: { x: number; y: number };
+  pose: { x: number; y: number; theta: number };
   color: string;
   type: WaypointType;
 };
@@ -34,6 +32,7 @@ const Field: React.FC = () => {
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [selectedWaypointIndex, setSelectedWaypointIndex] = useState<number | null>(null);
   const [settingType, setSettingType] = useState<WaypointType | null>(null);
+  const [activeActions, setActiveActions] = useState<{ [key: string]: boolean }>({});
 
   const fieldLengthFeet = 57.5; // X-axis
   const fieldWidthFeet = 26.4;  // Y-axis
@@ -41,17 +40,15 @@ const Field: React.FC = () => {
   // Topic Refs
   const topicsRef = useRef<{
     waypoints?: NetworkTablesTopic<string>;
+    export?: NetworkTablesTopic<string>;
     clickX?: NetworkTablesTopic<number>;
     clickY?: NetworkTablesTopic<number>;
-    aimX?: NetworkTablesTopic<number>;
-    aimY?: NetworkTablesTopic<number>;
-    aimTrigger?: NetworkTablesTopic<boolean>;
-    passX?: NetworkTablesTopic<number>;
-    passY?: NetworkTablesTopic<number>;
-    passTrigger?: NetworkTablesTopic<boolean>;
     moveX?: NetworkTablesTopic<number>;
     moveY?: NetworkTablesTopic<number>;
     moveTrigger?: NetworkTablesTopic<boolean>;
+    passX?: NetworkTablesTopic<number>;
+    passY?: NetworkTablesTopic<number>;
+    passTrigger?: NetworkTablesTopic<boolean>;
   }>({});
 
   const getWaypointByType = (type: WaypointType) => {
@@ -73,37 +70,22 @@ const Field: React.FC = () => {
 
     const ntTopics = {
       waypoints: nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString),
+      export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
       clickX: nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble),
       clickY: nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble),
-      aimX: nt.createTopic<number>('/dashboard/robot/aimWaypointX', NetworkTablesTypeInfos.kDouble),
-      aimY: nt.createTopic<number>('/dashboard/robot/aimWaypointY', NetworkTablesTypeInfos.kDouble),
-      aimTrigger: nt.createTopic<boolean>('/dashboard/robot/aimTrigger', NetworkTablesTypeInfos.kBoolean),
-      passX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
-      passY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
-      passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
       moveX: nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble),
       moveY: nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble),
       moveTrigger: nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean),
+      passX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
+      passY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
+      passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
     };
 
     topicsRef.current = ntTopics;
 
     const setup = async () => {
       try {
-        await Promise.all([
-          ntTopics.waypoints.publish(),
-          ntTopics.clickX.publish(),
-          ntTopics.clickY.publish(),
-          ntTopics.aimX.publish(),
-          ntTopics.aimY.publish(),
-          ntTopics.aimTrigger.publish(),
-          ntTopics.passX.publish(),
-          ntTopics.passY.publish(),
-          ntTopics.passTrigger.publish(),
-          ntTopics.moveX.publish(),
-          ntTopics.moveY.publish(),
-          ntTopics.moveTrigger.publish(),
-        ]);
+        await Promise.all(Object.values(ntTopics).map(t => t.publish()));
       } catch (e) {
         console.warn("Failed to publish some topics", e);
       }
@@ -117,9 +99,13 @@ const Field: React.FC = () => {
         const parsed = JSON.parse(val);
         if (!Array.isArray(parsed)) return;
         
-        const mapped: Waypoint[] = parsed.map((p: { pose?: { x: number; y: number }; color?: string; type?: WaypointType }) => ({
+        const mapped: Waypoint[] = parsed.map((p: { pose?: { x: number; y: number; theta?: number }; color?: string; type?: WaypointType }) => ({
           status: 'locked',
-          pose: p.pose ?? { x: 0, y: 0 },
+          pose: {
+            x: p.pose?.x ?? 0,
+            y: p.pose?.y ?? 0,
+            theta: p.pose?.theta ?? 0
+          },
           color: p.color ?? WAYPOINT_COLORS.General,
           type: p.type ?? WaypointType.General,
         }));
@@ -136,8 +122,6 @@ const Field: React.FC = () => {
 
     return () => {
       ntTopics.waypoints.unsubscribe(subuid);
-      // We don't necessarily need to unpublish everything on every re-run of this effect
-      // but if nt or connected changed, it's safer.
       Object.values(ntTopics).forEach(t => t.unpublish());
       topicsRef.current = {};
     };
@@ -184,7 +168,7 @@ const Field: React.FC = () => {
     const xFeet = (xPx / dimensions.width) * fieldLengthFeet;
     const yFeet = (yPx / dimensions.height) * fieldWidthFeet;
     
-    const pose = { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)) };
+    const pose = { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
 
     topicsRef.current.clickX?.setValue(pose.x);
     topicsRef.current.clickY?.setValue(pose.y);
@@ -192,7 +176,7 @@ const Field: React.FC = () => {
     const newWaypoint: Waypoint = {
       status: 'locked',
       pose,
-      color: WAYPOINT_COLORS[settingType],
+      color: WAYPOINT_COLORS[settingType as keyof typeof WAYPOINT_COLORS] || WAYPOINT_COLORS.General,
       type: settingType
     };
 
@@ -200,14 +184,49 @@ const Field: React.FC = () => {
     setSettingType(null);
   };
 
-  const runAction = (xTopic?: NetworkTablesTopic<number>, yTopic?: NetworkTablesTopic<number>, trigger?: NetworkTablesTopic<boolean>, wp?: Waypoint) => {
-    if (!wp) return;
-    xTopic?.setValue(wp.pose.x);
-    yTopic?.setValue(wp.pose.y);
-    if (trigger) {
-      trigger.setValue(true);
-      setTimeout(() => trigger.setValue(false), 200);
+  const handleExport = () => {
+    const moveWp = getWaypointByType(WaypointType.Move);
+    const shootWp = getWaypointByType(WaypointType.Shoot);
+    
+    const commands: string[] = [];
+    if (moveWp) {
+      commands.push(`DRIVE TO: ${moveWp.pose.x}, ${moveWp.pose.y}, ${moveWp.pose.theta}`);
     }
+    if (shootWp) {
+      commands.push(`AIM AT: ${shootWp.pose.x}, ${shootWp.pose.y}, ${shootWp.pose.theta}`);
+    }
+    
+    const exportString = commands.join('; ');
+    if (topicsRef.current.export) {
+      topicsRef.current.export.setValue(exportString);
+    }
+    navigator.clipboard.writeText(exportString);
+    alert(`Exported: ${exportString}`);
+  };
+
+  const startAction = (type: 'Move' | 'Shoot') => {
+    const wp = getWaypointByType(WaypointType[type]);
+    if (!wp) return;
+
+    if (type === 'Move') {
+      topicsRef.current.moveX?.setValue(wp.pose.x);
+      topicsRef.current.moveY?.setValue(wp.pose.y);
+      topicsRef.current.moveTrigger?.setValue(true);
+    } else {
+      topicsRef.current.passX?.setValue(wp.pose.x);
+      topicsRef.current.passY?.setValue(wp.pose.y);
+      topicsRef.current.passTrigger?.setValue(true);
+    }
+    setActiveActions(prev => ({ ...prev, [type]: true }));
+  };
+
+  const stopAction = (type: 'Move' | 'Shoot') => {
+    if (type === 'Move') {
+      topicsRef.current.moveTrigger?.setValue(false);
+    } else {
+      topicsRef.current.passTrigger?.setValue(false);
+    }
+    setActiveActions(prev => ({ ...prev, [type]: false }));
   };
 
   return (
@@ -247,10 +266,12 @@ const Field: React.FC = () => {
         })}
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mt-2">
-        {(['Aim', 'Shoot', 'Move'] as WaypointType[]).map(type => (
-          <div key={type} className="flex flex-col gap-2">
+      <div className="flex flex-col gap-4">
+        {/* Waypoint Setting Buttons */}
+        <div className="grid grid-cols-2 gap-4">
+          {(['Move', 'Shoot'] as WaypointType[]).map(type => (
             <button
+              key={type}
               onClick={() => {
                 if (getWaypointByType(type)) {
                   setWaypoints(prev => prev.filter(wp => wp.type !== type));
@@ -259,31 +280,67 @@ const Field: React.FC = () => {
                   setSettingType(prev => prev === type ? null : type);
                 }
               }}
-              className={`px-3 py-2 text-sm font-bold rounded-lg transition-colors ${settingType === type ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+              className={`px-3 py-3 text-sm font-bold rounded-lg transition-colors ${settingType === type ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
             >
               {getWaypointByType(type) ? `Reset ${type}` : `Set ${type}`}
             </button>
-            <button
-              disabled={!getWaypointByType(type)}
-              onClick={() => {
-                const wp = getWaypointByType(type);
-                if (type === 'Aim') runAction(topicsRef.current.aimX, topicsRef.current.aimY, topicsRef.current.aimTrigger, wp);
-                if (type === 'Shoot') runAction(topicsRef.current.passX, topicsRef.current.passY, topicsRef.current.passTrigger, wp);
-                if (type === 'Move') runAction(topicsRef.current.moveX, topicsRef.current.moveY, topicsRef.current.moveTrigger, wp);
-              }}
-              className="px-3 py-2 text-sm font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              {type === 'Aim' ? 'Aim Robot' : type === 'Shoot' ? 'Pass/Shoot' : 'Move Robot'}
-            </button>
-          </div>
-        ))}
+          ))}
+        </div>
+        
+        {/* Action Buttons (Hold) */}
+        <div className="flex flex-col gap-3">
+          <button
+            onMouseDown={() => startAction('Move')}
+            onMouseUp={() => stopAction('Move')}
+            onMouseLeave={() => activeActions.Move && stopAction('Move')}
+            onTouchStart={() => startAction('Move')}
+            onTouchEnd={() => stopAction('Move')}
+            disabled={!getWaypointByType(WaypointType.Move)}
+            className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
+              activeActions.Move 
+                ? 'bg-green-500 text-black border-green-400 scale-95' 
+                : 'bg-green-700 text-white border-green-600 hover:bg-green-600 disabled:opacity-30 disabled:cursor-not-allowed'
+            }`}
+          >
+            {activeActions.Move ? 'Driving...' : 'Drive To (HOLD)'}
+          </button>
+
+          <button
+            onMouseDown={() => startAction('Shoot')}
+            onMouseUp={() => stopAction('Shoot')}
+            onMouseLeave={() => activeActions.Shoot && stopAction('Shoot')}
+            onTouchStart={() => startAction('Shoot')}
+            onTouchEnd={() => stopAction('Shoot')}
+            disabled={!getWaypointByType(WaypointType.Shoot)}
+            className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
+              activeActions.Shoot 
+                ? 'bg-pink-500 text-black border-pink-400 scale-95' 
+                : 'bg-pink-700 text-white border-pink-600 hover:bg-pink-600 disabled:opacity-30 disabled:cursor-not-allowed'
+            }`}
+          >
+            {activeActions.Shoot ? 'Shooting...' : 'Shoot (HOLD)'}
+          </button>
+        </div>
+
+        {/* Export Button */}
+        <button
+          onClick={handleExport}
+          disabled={waypoints.length === 0}
+          className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold rounded-lg transition-all active:scale-[0.98] border border-blue-400/20"
+        >
+          Export Waypoints String
+        </button>
       </div>
 
       {selectedWaypointIndex !== null && waypoints[selectedWaypointIndex] && (
         <div className="p-4 bg-gray-800 rounded-lg border-l-4 border-blue-500 flex justify-between items-center">
           <div>
             <h3 className="font-bold">{waypoints[selectedWaypointIndex].type} Waypoint</h3>
-            <p className="text-sm text-gray-400">X: {waypoints[selectedWaypointIndex].pose.x} ft, Y: {waypoints[selectedWaypointIndex].pose.y} ft</p>
+            <p className="text-sm text-gray-400">
+              X: {waypoints[selectedWaypointIndex].pose.x} ft, 
+              Y: {waypoints[selectedWaypointIndex].pose.y} ft, 
+              θ: {waypoints[selectedWaypointIndex].pose.theta}°
+            </p>
           </div>
           <button onClick={() => setSelectedWaypointIndex(null)} className="text-gray-500 hover:text-white">Close</button>
         </div>
@@ -292,7 +349,7 @@ const Field: React.FC = () => {
       {waypoints.length > 0 && (
         <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
           <h3 className="text-lg font-bold text-white mb-3">Active Waypoints</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {waypoints.map((wp, index) => (
               <div key={index} 
                    onClick={() => setSelectedWaypointIndex(index)}
@@ -302,7 +359,7 @@ const Field: React.FC = () => {
                   <span className="font-semibold text-sm">{wp.type}</span>
                 </div>
                 <div className="font-mono text-xs text-gray-400">
-                  ({wp.pose.x.toFixed(1)}, {wp.pose.y.toFixed(1)})
+                  ({wp.pose.x.toFixed(1)}, {wp.pose.y.toFixed(1)}, {wp.pose.theta.toFixed(0)}°)
                 </div>
               </div>
             ))}
