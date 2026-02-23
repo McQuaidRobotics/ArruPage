@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNetworkTables } from '../NetworkTablesContext';
+import { useNetworkTables } from '../useNetworkTables';
 import { NetworkTablesTypeInfos, NetworkTablesTopic } from 'ntcore-ts-client';
 
 interface NTButtonProps {

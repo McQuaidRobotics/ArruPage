@@ -1,311 +1,369 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import fieldImage from '../assets/2026 FRC.png';
-import { useNetworkTables } from '../NetworkTablesContext';
+import { useNetworkTables } from '../useNetworkTables';
 import { NetworkTablesTopic, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 // A palette of distinct colors for locked waypoints
-const WAYPOINT_COLORS = ['#00FF00', '#00FFFF', '#FFA500', '#FF00FF', '#FFFF00', '#FFFFFF']; // Lime, Aqua, Orange, Fuchsia, Yellow, White
+const WAYPOINT_COLORS = {
+  Shoot: '#FF00FF', // Fuchsia
+  Move: '#00FF00',  // Lime
+  General: '#FFFF00' // Yellow
+} as const;
 
-interface Waypoint {
-  pixel: { x: number; y: number };
-  pose: { x: number; y: number };
-  status: 'current' | 'locked';
+export const WaypointType = {
+  Shoot: 'Shoot',
+  Move: 'Move',
+  General: 'General',
+} as const;
+
+export type WaypointType = (typeof WaypointType)[keyof typeof WaypointType];
+
+type Waypoint = {
+  status: "current" | "locked";
+  pose: { x: number; y: number; theta: number };
   color: string;
-}
+  type: WaypointType;
+};
 
 const Field: React.FC = () => {
   const { nt, connected } = useNetworkTables();
   const imageRef = useRef<HTMLImageElement>(null);
-  const [renderedImageDimensions, setRenderedImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [selectedWaypointIndex, setSelectedWaypointIndex] = useState<number | null>(null);
+  const [settingType, setSettingType] = useState<WaypointType | null>(null);
+  const [activeActions, setActiveActions] = useState<{ [key: string]: boolean }>({});
 
-      // Refs to hold the NetworkTables topics
-      const waypointsTopicRef = useRef<NetworkTablesTopic<string> | null>(null);
-      const clickXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const clickYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      // New topics for robot actions
-      const aimToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const aimToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const aimToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
-  
-      const passToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const passToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const passToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
-  
-      const moveToWaypointXTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const moveToWaypointYTopicRef = useRef<NetworkTablesTopic<number> | null>(null);
-      const moveToWaypointTriggerTopicRef = useRef<NetworkTablesTopic<boolean> | null>(null);
-  
-      const fieldLengthFeet = 57.5; // X-axis
-      const fieldWidthFeet = 26.4;  // Y-axis
-  
-      // Effect to set up NetworkTables topics
-      useEffect(() => {
-        if (!nt || !connected) return;
-  
-        // Create topics and store them in refs
-        waypointsTopicRef.current = nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString);
-        clickXTopicRef.current = nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble);
-        clickYTopicRef.current = nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble);
+  const fieldLengthFeet = 57.5; // X-axis
+  const fieldWidthFeet = 26.4;  // Y-axis
+
+  // Topic Refs
+  const topicsRef = useRef<{
+    waypoints?: NetworkTablesTopic<string>;
+    export?: NetworkTablesTopic<string>;
+    clickX?: NetworkTablesTopic<number>;
+    clickY?: NetworkTablesTopic<number>;
+    moveX?: NetworkTablesTopic<number>;
+    moveY?: NetworkTablesTopic<number>;
+    moveTrigger?: NetworkTablesTopic<boolean>;
+    passX?: NetworkTablesTopic<number>;
+    passY?: NetworkTablesTopic<number>;
+    passTrigger?: NetworkTablesTopic<boolean>;
+  }>({});
+
+  const getWaypointByType = (type: WaypointType) => {
+    return waypoints.find(wp => wp.type === type);
+  };
+
+  // Helper to convert pose to pixel
+  const poseToPixel = useMemo(() => (pose: { x: number; y: number }) => {
+    if (!dimensions) return { x: 0, y: 0 };
+    return {
+      x: (pose.x / fieldLengthFeet) * dimensions.width,
+      y: (pose.y / fieldWidthFeet) * dimensions.height
+    };
+  }, [dimensions, fieldLengthFeet, fieldWidthFeet]);
+
+  // Effect to set up NetworkTables topics
+  useEffect(() => {
+    if (!nt || !connected) return;
+
+    const ntTopics = {
+      waypoints: nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString),
+      export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
+      clickX: nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble),
+      clickY: nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble),
+      moveX: nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble),
+      moveY: nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble),
+      moveTrigger: nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean),
+      passX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
+      passY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
+      passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
+    };
+
+    topicsRef.current = ntTopics;
+
+    const setup = async () => {
+      try {
+        await Promise.all(Object.values(ntTopics).map(t => t.publish()));
+      } catch (e) {
+        console.warn("Failed to publish some topics", e);
+      }
+    };
+
+    setup();
+
+    const subuid = ntTopics.waypoints.subscribe((val) => {
+      if (!val) return;
+      try {
+        const parsed = JSON.parse(val);
+        if (!Array.isArray(parsed)) return;
         
-        // Initialize new action topics
-        aimToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/aimWaypointX', NetworkTablesTypeInfos.kDouble);
-        aimToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/aimWaypointY', NetworkTablesTypeInfos.kDouble);
-        aimToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/aimTrigger', NetworkTablesTypeInfos.kBoolean);
-        
-        passToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble);
-        passToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble);
-        passToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean);
-        
-        moveToWaypointXTopicRef.current = nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble);
-        moveToWaypointYTopicRef.current = nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble);
-        moveToWaypointTriggerTopicRef.current = nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean);
-        
-        // Asynchronously publish the topics
-        const publishTopics = async () => {
-          try {
-            await waypointsTopicRef.current?.publish();
-            await clickXTopicRef.current?.publish();
-            await clickYTopicRef.current?.publish();
-            
-            await aimToWaypointXTopicRef.current?.publish();
-            await aimToWaypointYTopicRef.current?.publish();
-            await aimToWaypointTriggerTopicRef.current?.publish();
-            
-            await passToWaypointXTopicRef.current?.publish();
-            await passToWaypointYTopicRef.current?.publish();
-            await passToWaypointTriggerTopicRef.current?.publish();
-            
-            await moveToWaypointXTopicRef.current?.publish();
-            await moveToWaypointYTopicRef.current?.publish();
-            await moveToWaypointTriggerTopicRef.current?.publish();
-          } catch (e) {
-            console.error("Failed to publish field topics:", e);
-          }
-        };
-        
-        publishTopics();
-  
-        return () => {
-          waypointsTopicRef.current?.unpublish();
-          clickXTopicRef.current?.unpublish();
-          clickYTopicRef.current?.unpublish();
-  
-          aimToWaypointXTopicRef.current?.unpublish();
-          aimToWaypointYTopicRef.current?.unpublish();
-          aimToWaypointTriggerTopicRef.current?.unpublish();
-  
-          passToWaypointXTopicRef.current?.unpublish();
-          passToWaypointYTopicRef.current?.unpublish();
-          passToWaypointTriggerTopicRef.current?.unpublish();
-  
-          moveToWaypointXTopicRef.current?.unpublish();
-          moveToWaypointYTopicRef.current?.unpublish();
-          moveToWaypointTriggerTopicRef.current?.unpublish();
-        };
-      }, [nt, connected]);
-    
-  // Effect to get image dimensions for coordinate scaling
+        const mapped: Waypoint[] = parsed.map((p: { pose?: { x: number; y: number; theta?: number }; color?: string; type?: WaypointType }) => ({
+          status: 'locked',
+          pose: {
+            x: p.pose?.x ?? 0,
+            y: p.pose?.y ?? 0,
+            theta: p.pose?.theta ?? 0
+          },
+          color: p.color ?? WAYPOINT_COLORS.General,
+          type: p.type ?? WaypointType.General,
+        }));
+
+        setWaypoints(prev => {
+          const currentStr = JSON.stringify(prev.map(wp => ({ pose: wp.pose, type: wp.type })));
+          const newStr = JSON.stringify(mapped.map(wp => ({ pose: wp.pose, type: wp.type })));
+          return currentStr === newStr ? prev : mapped;
+        });
+      } catch (e) {
+        console.error('Failed to parse waypoints', e);
+      }
+    });
+
+    return () => {
+      ntTopics.waypoints.unsubscribe(subuid);
+      Object.values(ntTopics).forEach(t => t.unpublish());
+      topicsRef.current = {};
+    };
+  }, [nt, connected]);
+
+  // Handle image resize
   useEffect(() => {
     const updateDimensions = () => {
       if (imageRef.current) {
-        setRenderedImageDimensions({ width: imageRef.current.offsetWidth, height: imageRef.current.offsetHeight });
+        setDimensions({ width: imageRef.current.offsetWidth, height: imageRef.current.offsetHeight });
       }
     };
-    if (imageRef.current) {
-      if (imageRef.current.complete) updateDimensions();
-      imageRef.current.addEventListener('load', updateDimensions);
+    const img = imageRef.current;
+    if (img) {
+      if (img.complete) updateDimensions();
+      img.addEventListener('load', updateDimensions);
     }
     window.addEventListener('resize', updateDimensions);
     return () => {
-      if (imageRef.current) imageRef.current.removeEventListener('load', updateDimensions);
+      if (img) img.removeEventListener('load', updateDimensions);
       window.removeEventListener('resize', updateDimensions);
     };
   }, []);
 
-  // Effect to update NetworkTables when locked waypoints change
+  // Update NT when waypoints change
   useEffect(() => {
-    const lockedWaypoints = waypoints
-      .filter(wp => wp.status === 'locked')
-      .map(wp => ({ pose: wp.pose, color: wp.color }));
-      
-    waypointsTopicRef.current?.setValue(JSON.stringify(lockedWaypoints));
+    const topic = topicsRef.current.waypoints;
+    if (!topic) return;
+
+    const locked = waypoints.map(wp => ({ pose: wp.pose, color: wp.color, type: wp.type }));
+    const json = JSON.stringify(locked);
+    
+    if (topic.getValue() !== json) {
+      topic.setValue(json);
+    }
   }, [waypoints]);
 
   const handleFieldClick = (event: React.MouseEvent<HTMLImageElement>) => {
-    if (!renderedImageDimensions) return;
+    if (!dimensions || !settingType) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const clickXInPixels = event.clientX - rect.left;
-    const clickYInPixels = event.clientY - rect.top;
+    const xPx = event.clientX - rect.left;
+    const yPx = event.clientY - rect.top;
 
-    const xFeet = (clickXInPixels / renderedImageDimensions.width) * fieldLengthFeet;
-    const yFeet = (clickYInPixels / renderedImageDimensions.height) * fieldWidthFeet;
+    const xFeet = (xPx / dimensions.width) * fieldLengthFeet;
+    const yFeet = (yPx / dimensions.height) * fieldWidthFeet;
     
-    const pose = { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)) };
+    const pose = { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
+
+    topicsRef.current.clickX?.setValue(pose.x);
+    topicsRef.current.clickY?.setValue(pose.y);
 
     const newWaypoint: Waypoint = {
-      pixel: { x: clickXInPixels, y: clickYInPixels },
-      pose: pose,
-      status: 'current',
-      color: 'red',
+      status: 'locked',
+      pose,
+      color: WAYPOINT_COLORS[settingType as keyof typeof WAYPOINT_COLORS] || WAYPOINT_COLORS.General,
+      type: settingType
     };
 
-    setWaypoints(prev => [...prev.filter(wp => wp.status !== 'current'), newWaypoint]);
+    setWaypoints(prev => [...prev.filter(wp => wp.type !== settingType), newWaypoint]);
+    setSettingType(null);
+  };
+
+  const handleExport = () => {
+    const moveWp = getWaypointByType(WaypointType.Move);
+    const shootWp = getWaypointByType(WaypointType.Shoot);
     
-    // Update the single-click topics
-    clickXTopicRef.current?.setValue(pose.x);
-    clickYTopicRef.current?.setValue(pose.y);
-  };
-
-  const handleLockPose = () => {
-    setWaypoints(prev => {
-      const lockedCount = prev.filter(wp => wp.status === 'locked').length;
-      const nextColor = WAYPOINT_COLORS[lockedCount % WAYPOINT_COLORS.length];
-      
-      let newlyLockedIndex: number | null = null;
-      const updatedWaypoints = prev.map((wp, index) => {
-        if (wp.status === 'current') {
-          newlyLockedIndex = index;
-          return { ...wp, status: 'locked', color: nextColor };
-        }
-        return wp;
-      });
-      setSelectedWaypointIndex(newlyLockedIndex);
-      return updatedWaypoints;
-    });
-  };
-
-  const handleClearWaypoints = () => {
-    setWaypoints([]);
-    setSelectedWaypointIndex(null); // Clear selected waypoint when all are removed
-  };
-
-  const handleRobotAction = (
-    xTopic: NetworkTablesTopic<number> | null,
-    yTopic: NetworkTablesTopic<number> | null,
-    triggerTopic: NetworkTablesTopic<boolean> | null
-  ) => {
-    if (selectedWaypointIndex === null || waypoints[selectedWaypointIndex]?.status !== 'locked') return;
-
-    const selectedWaypoint = waypoints[selectedWaypointIndex];
-    if (xTopic) xTopic.setValue(selectedWaypoint.pose.x);
-    if (yTopic) yTopic.setValue(selectedWaypoint.pose.y);
-    if (triggerTopic) {
-      triggerTopic.setValue(true);
-      setTimeout(() => triggerTopic.setValue(false), 200); // Trigger for 200ms
+    const commands: string[] = [];
+    if (moveWp) {
+      commands.push(`DRIVE TO: ${moveWp.pose.x}, ${moveWp.pose.y}, ${moveWp.pose.theta}`);
     }
+    if (shootWp) {
+      commands.push(`AIM AT: ${shootWp.pose.x}, ${shootWp.pose.y}, ${shootWp.pose.theta}`);
+    }
+    
+    const exportString = commands.join('; ');
+    if (topicsRef.current.export) {
+      topicsRef.current.export.setValue(exportString);
+    }
+    navigator.clipboard.writeText(exportString);
+    alert(`Exported: ${exportString}`);
   };
 
-  const handleAimRobot = () => {
-    handleRobotAction(aimToWaypointXTopicRef.current, aimToWaypointYTopicRef.current, aimToWaypointTriggerTopicRef.current);
+  const startAction = (type: 'Move' | 'Shoot') => {
+    const wp = getWaypointByType(WaypointType[type]);
+    if (!wp) return;
+
+    if (type === 'Move') {
+      topicsRef.current.moveX?.setValue(wp.pose.x);
+      topicsRef.current.moveY?.setValue(wp.pose.y);
+      topicsRef.current.moveTrigger?.setValue(true);
+    } else {
+      topicsRef.current.passX?.setValue(wp.pose.x);
+      topicsRef.current.passY?.setValue(wp.pose.y);
+      topicsRef.current.passTrigger?.setValue(true);
+    }
+    setActiveActions(prev => ({ ...prev, [type]: true }));
   };
 
-  const handlePassToWaypoint = () => {
-    handleRobotAction(passToWaypointXTopicRef.current, passToWaypointYTopicRef.current, passToWaypointTriggerTopicRef.current);
+  const stopAction = (type: 'Move' | 'Shoot') => {
+    if (type === 'Move') {
+      topicsRef.current.moveTrigger?.setValue(false);
+    } else {
+      topicsRef.current.passTrigger?.setValue(false);
+    }
+    setActiveActions(prev => ({ ...prev, [type]: false }));
   };
-
-  const handleMoveToWaypoint = () => {
-    handleRobotAction(moveToWaypointXTopicRef.current, moveToWaypointYTopicRef.current, moveToWaypointTriggerTopicRef.current);
-  };
-
-  const hasCurrentWaypoint = waypoints.some(wp => wp.status === 'current');
 
   return (
-    <div>
-      <h2>2026 FRC Field</h2>
-      <div style={{ position: 'relative', width: '100%', paddingBottom: `${(fieldWidthFeet / fieldLengthFeet) * 100}%`, overflow: 'hidden' }}>
-        <img ref={imageRef} src={fieldImage} alt="2026 FRC Field" onClick={handleFieldClick} style={{ cursor: 'crosshair', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
-        {waypoints.map((wp, index) => (
-          <div key={index} 
-               style={{
-                  position: 'absolute',
-                  left: wp.pixel.x - 5,
-                  top: wp.pixel.y - 5,
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  backgroundColor: wp.color,
-                  border: `2px solid ${selectedWaypointIndex === index ? 'white' : wp.status === 'locked' ? 'gray' : 'white'}`,
-                  cursor: wp.status === 'locked' ? 'pointer' : 'default',
-                  zIndex: 10,
-               }}
-               onClick={() => {
-                 if (wp.status === 'locked') {
-                   setSelectedWaypointIndex(index);
-                 }
-               }}
-          />
-        ))}
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-white">2026 FRC Field</h2>
+        {settingType && (
+          <div className="bg-yellow-500 text-black px-4 py-1 rounded-full animate-pulse font-bold">
+            Click Field to set {settingType}
+          </div>
+        )}
       </div>
-      <div className="flex gap-4 mt-4">
+      
+      <div className="relative w-full border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
+           style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
+        <img 
+          ref={imageRef} 
+          src={fieldImage} 
+          alt="Field" 
+          onClick={handleFieldClick} 
+          className={`w-full h-full object-contain ${settingType ? 'cursor-crosshair' : ''}`}
+        />
+        {waypoints.map((wp, i) => {
+          const pixel = poseToPixel(wp.pose);
+          return (
+            <div key={i} 
+                 onClick={(e) => { e.stopPropagation(); setSelectedWaypointIndex(i); }}
+                 className={`absolute w-5 h-5 rounded-full border-2 cursor-pointer z-10 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
+                 style={{ 
+                   left: pixel.x, 
+                   top: pixel.y, 
+                   backgroundColor: wp.color,
+                   transform: `translate(-50%, -50%) ${selectedWaypointIndex === i ? 'scale(1.2)' : 'scale(1)'}`
+                 }}
+            />
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-4">
+        {/* Waypoint Setting Buttons */}
+        <div className="grid grid-cols-2 gap-4">
+          {(['Move', 'Shoot'] as WaypointType[]).map(type => (
+            <button
+              key={type}
+              onClick={() => {
+                if (getWaypointByType(type)) {
+                  setWaypoints(prev => prev.filter(wp => wp.type !== type));
+                  setSettingType(type);
+                } else {
+                  setSettingType(prev => prev === type ? null : type);
+                }
+              }}
+              className={`px-3 py-3 text-sm font-bold rounded-lg transition-colors ${settingType === type ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            >
+              {getWaypointByType(type) ? `Reset ${type}` : `Set ${type}`}
+            </button>
+          ))}
+        </div>
+        
+        {/* Action Buttons (Hold) */}
+        <div className="flex flex-col gap-3">
+          <button
+            onMouseDown={() => startAction('Move')}
+            onMouseUp={() => stopAction('Move')}
+            onMouseLeave={() => activeActions.Move && stopAction('Move')}
+            onTouchStart={() => startAction('Move')}
+            onTouchEnd={() => stopAction('Move')}
+            disabled={!getWaypointByType(WaypointType.Move)}
+            className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
+              activeActions.Move 
+                ? 'bg-green-500 text-black border-green-400 scale-95' 
+                : 'bg-green-700 text-white border-green-600 hover:bg-green-600 disabled:opacity-30 disabled:cursor-not-allowed'
+            }`}
+          >
+            {activeActions.Move ? 'Driving...' : 'Drive To (HOLD)'}
+          </button>
+
+          <button
+            onMouseDown={() => startAction('Shoot')}
+            onMouseUp={() => stopAction('Shoot')}
+            onMouseLeave={() => activeActions.Shoot && stopAction('Shoot')}
+            onTouchStart={() => startAction('Shoot')}
+            onTouchEnd={() => stopAction('Shoot')}
+            disabled={!getWaypointByType(WaypointType.Shoot)}
+            className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
+              activeActions.Shoot 
+                ? 'bg-pink-500 text-black border-pink-400 scale-95' 
+                : 'bg-pink-700 text-white border-pink-600 hover:bg-pink-600 disabled:opacity-30 disabled:cursor-not-allowed'
+            }`}
+          >
+            {activeActions.Shoot ? 'Shooting...' : 'Shoot (HOLD)'}
+          </button>
+        </div>
+
+        {/* Export Button */}
         <button
-          onClick={handleLockPose}
-          disabled={!hasCurrentWaypoint}
-          className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+          onClick={handleExport}
+          disabled={waypoints.length === 0}
+          className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold rounded-lg transition-all active:scale-[0.98] border border-blue-400/20"
         >
-          Lock Pose
-        </button>
-        <button
-          onClick={handleClearWaypoints}
-          className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700"
-        >
-          Remove All Waypoints
-        </button>
-        <button
-          onClick={handleAimRobot}
-          disabled={selectedWaypointIndex === null || waypoints[selectedWaypointIndex]?.status !== 'locked'}
-          className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
-        >
-          Aim Robot at Locked Waypoint
-        </button>
-        <button
-          onClick={handlePassToWaypoint}
-          disabled={selectedWaypointIndex === null || waypoints[selectedWaypointIndex]?.status !== 'locked'}
-          className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
-        >
-          Pass to Selected Waypoint
-        </button>
-        <button
-          onClick={handleMoveToWaypoint}
-          disabled={selectedWaypointIndex === null || waypoints[selectedWaypointIndex]?.status !== 'locked'}
-          className="px-4 py-2 bg-teal-600 text-white font-semibold rounded-lg shadow-md hover:bg-teal-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
-        >
-          Move to Selected Waypoint
+          Export Waypoints String
         </button>
       </div>
 
-      {selectedWaypointIndex !== null && waypoints[selectedWaypointIndex]?.status === 'locked' && (
-        <div className="mt-6 p-4 bg-gray-700 rounded-lg">
-          <h3 className="text-xl font-semibold text-gray-200 mb-2">Selected Locked Waypoint:</h3>
-          <p className="text-gray-300">
-            X: {waypoints[selectedWaypointIndex].pose.x.toFixed(2)} ft,
-            Y: {waypoints[selectedWaypointIndex].pose.y.toFixed(2)} ft
-          </p>
+      {selectedWaypointIndex !== null && waypoints[selectedWaypointIndex] && (
+        <div className="p-4 bg-gray-800 rounded-lg border-l-4 border-blue-500 flex justify-between items-center">
+          <div>
+            <h3 className="font-bold">{waypoints[selectedWaypointIndex].type} Waypoint</h3>
+            <p className="text-sm text-gray-400">
+              X: {waypoints[selectedWaypointIndex].pose.x} ft, 
+              Y: {waypoints[selectedWaypointIndex].pose.y} ft, 
+              θ: {waypoints[selectedWaypointIndex].pose.theta}°
+            </p>
+          </div>
+          <button onClick={() => setSelectedWaypointIndex(null)} className="text-gray-500 hover:text-white">Close</button>
         </div>
       )}
 
-      {waypoints.find(wp => wp.status === 'current') && (
-        <div className="mt-6">
-          <h3 className="text-xl font-semibold text-gray-200 mb-2">Current Waypoint (feet):</h3>
-          <p className="text-gray-300">
-            X: {waypoints.find(wp => wp.status === 'current')?.pose.x.toFixed(2)} ft, 
-            Y: {waypoints.find(wp => wp.status === 'current')?.pose.y.toFixed(2)} ft
-          </p>
-        </div>
-      )}
-
-      {waypoints.filter(wp => wp.status === 'locked').length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-xl font-semibold text-gray-200 mb-2">Locked Waypoints:</h3>
-          <ul className="space-y-1">
-            {waypoints.filter(wp => wp.status === 'locked').map((wp, index) => (
-              <li key={index} className="flex items-center text-gray-300">
-                <span style={{ backgroundColor: wp.color }} className="w-4 h-4 rounded-full mr-2 border border-gray-400"></span>
-                <span>X: {wp.pose.x.toFixed(2)} ft, Y: {wp.pose.y.toFixed(2)} ft</span>
-              </li>
+      {waypoints.length > 0 && (
+        <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+          <h3 className="text-lg font-bold text-white mb-3">Active Waypoints</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {waypoints.map((wp, index) => (
+              <div key={index} 
+                   onClick={() => setSelectedWaypointIndex(index)}
+                   className={`flex items-center justify-between p-2 rounded bg-gray-900/50 border cursor-pointer transition-colors ${selectedWaypointIndex === index ? 'border-blue-500 bg-gray-900' : 'border-gray-700 hover:border-gray-600'}`}>
+                <div className="flex items-center gap-2">
+                  <div style={{ backgroundColor: wp.color }} className="w-3 h-3 rounded-full shadow-sm" />
+                  <span className="font-semibold text-sm">{wp.type}</span>
+                </div>
+                <div className="font-mono text-xs text-gray-400">
+                  ({wp.pose.x.toFixed(1)}, {wp.pose.y.toFixed(1)}, {wp.pose.theta.toFixed(0)}°)
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
     </div>
