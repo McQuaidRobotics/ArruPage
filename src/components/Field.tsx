@@ -62,7 +62,7 @@ const Field: React.FC = () => {
     if (!dimensions) return { x: 0, y: 0 };
     return {
       x: (pose.x / fieldLengthFeet) * dimensions.width,
-      y: (pose.y / fieldWidthFeet) * dimensions.height
+      y: dimensions.height - (pose.y / fieldWidthFeet) * dimensions.height
     };
   }, [dimensions, fieldLengthFeet, fieldWidthFeet]);
 
@@ -168,7 +168,7 @@ const Field: React.FC = () => {
     const yPx = clientY - rect.top;
 
     const xFeet = Math.max(0, Math.min(fieldLengthFeet, (xPx / dimensions.width) * fieldLengthFeet));
-    const yFeet = Math.max(0, Math.min(fieldWidthFeet, (yPx / dimensions.height) * fieldWidthFeet));
+    const yFeet = Math.max(0, Math.min(fieldWidthFeet, ((dimensions.height - yPx) / dimensions.height) * fieldWidthFeet));
     
     return { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
   };
