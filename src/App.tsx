@@ -47,8 +47,7 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-blue-400 uppercase tracking-wider">Toggle Controls</h2>
             <div className="flex flex-col gap-4">
-              <NTButton topic="/dashboard/intake" label="Intake" initialValue={true} />
-              <NTButton topic="/dashboard/shooter" label="Shooter" initialValue={true} />
+                             <NTButton topic="/dashboard/intake" label="Intake" initialValue={false} />              <NTButton topic="/dashboard/shooter" label="Shooter" initialValue={false} />
             </div>
           </div>
 
