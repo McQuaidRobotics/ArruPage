@@ -49,7 +49,7 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
             <div className="flex flex-col gap-4">
                              <NTButton topic="/dashboard/intake" label="Intake" initialValue={false} />
                              <NTButton topic="/dashboard/shooter" label="Shooter" initialValue={false} />
-                             <NTButton topic="/dashboard/disableAutoShoot" label="Disable Auto Shoot" initialValue={false} />
+                             <NTButton topic="/dashboard/disableAutoShoot" label="Auto Shoot" initialValue={true} />
             </div>
           </div>
 
