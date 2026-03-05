@@ -5,13 +5,13 @@ import { NetworkTablesTopic, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 // A palette of distinct colors for locked waypoints
 const WAYPOINT_COLORS = {
-  Shoot: '#FF00FF', // Fuchsia
+  Pass: '#FF00FF', // Fuchsia
   Move: '#00FF00',  // Lime
   General: '#FFFF00' // Yellow
 } as const;
 
 export const WaypointType = {
-  Shoot: 'Shoot',
+  Pass: 'Pass',
   Move: 'Move',
   General: 'General',
 } as const;
@@ -28,11 +28,13 @@ type Waypoint = {
 const Field: React.FC = () => {
   const { nt, connected } = useNetworkTables();
   const imageRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [selectedWaypointIndex, setSelectedWaypointIndex] = useState<number | null>(null);
   const [settingType, setSettingType] = useState<WaypointType | null>(null);
   const [activeActions, setActiveActions] = useState<{ [key: string]: boolean }>({});
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const fieldLengthFeet = 57.5; // X-axis
   const fieldWidthFeet = 26.4;  // Y-axis
@@ -60,7 +62,7 @@ const Field: React.FC = () => {
     if (!dimensions) return { x: 0, y: 0 };
     return {
       x: (pose.x / fieldLengthFeet) * dimensions.width,
-      y: (pose.y / fieldWidthFeet) * dimensions.height
+      y: dimensions.height - (pose.y / fieldWidthFeet) * dimensions.height
     };
   }, [dimensions, fieldLengthFeet, fieldWidthFeet]);
 
@@ -159,16 +161,24 @@ const Field: React.FC = () => {
     }
   }, [waypoints]);
 
-  const handleFieldClick = (event: React.MouseEvent<HTMLImageElement>) => {
-    if (!dimensions || !settingType) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const xPx = event.clientX - rect.left;
-    const yPx = event.clientY - rect.top;
+  const getPoseFromEvent = (clientX: number, clientY: number) => {
+    if (!dimensions || !containerRef.current) return null;
+    const rect = containerRef.current.getBoundingClientRect();
+    const xPx = clientX - rect.left;
+    const yPx = clientY - rect.top;
 
-    const xFeet = (xPx / dimensions.width) * fieldLengthFeet;
-    const yFeet = (yPx / dimensions.height) * fieldWidthFeet;
+    const xFeet = Math.max(0, Math.min(fieldLengthFeet, (xPx / dimensions.width) * fieldLengthFeet));
+    const yFeet = Math.max(0, Math.min(fieldWidthFeet, ((dimensions.height - yPx) / dimensions.height) * fieldWidthFeet));
     
-    const pose = { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
+    return { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
+  };
+
+  const handleFieldClick = (event: React.MouseEvent<HTMLImageElement>) => {
+    if (draggingIndex !== null) return;
+    if (!settingType) return;
+    
+    const pose = getPoseFromEvent(event.clientX, event.clientY);
+    if (!pose) return;
 
     topicsRef.current.clickX?.setValue(pose.x);
     topicsRef.current.clickY?.setValue(pose.y);
@@ -184,16 +194,57 @@ const Field: React.FC = () => {
     setSettingType(null);
   };
 
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
+    e.stopPropagation();
+    setDraggingIndex(index);
+    setSelectedWaypointIndex(index);
+  };
+
+  const handleDragMove = (e: MouseEvent | TouchEvent) => {
+    if (draggingIndex === null) return;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+    
+    const pose = getPoseFromEvent(clientX, clientY);
+    if (pose) {
+      setWaypoints(prev => {
+        const next = [...prev];
+        next[draggingIndex] = { ...next[draggingIndex], pose: { ...next[draggingIndex].pose, x: pose.x, y: pose.y } };
+        return next;
+      });
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggingIndex(null);
+  };
+
+  useEffect(() => {
+    if (draggingIndex !== null) {
+      window.addEventListener('mousemove', handleDragMove);
+      window.addEventListener('mouseup', handleDragEnd);
+      window.addEventListener('touchmove', handleDragMove, { passive: false });
+      window.addEventListener('touchend', handleDragEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [draggingIndex]);
+
   const handleExport = () => {
     const moveWp = getWaypointByType(WaypointType.Move);
-    const shootWp = getWaypointByType(WaypointType.Shoot);
+    const passWp = getWaypointByType(WaypointType.Pass);
     
     const commands: string[] = [];
     if (moveWp) {
       commands.push(`DRIVE TO: ${moveWp.pose.x}, ${moveWp.pose.y}, ${moveWp.pose.theta}`);
     }
-    if (shootWp) {
-      commands.push(`AIM AT: ${shootWp.pose.x}, ${shootWp.pose.y}, ${shootWp.pose.theta}`);
+    if (passWp) {
+      commands.push(`AIM AT: ${passWp.pose.x}, ${passWp.pose.y}, ${passWp.pose.theta}`);
     }
     
     const exportString = commands.join('; ');
@@ -204,7 +255,7 @@ const Field: React.FC = () => {
     alert(`Exported: ${exportString}`);
   };
 
-  const startAction = (type: 'Move' | 'Shoot') => {
+  const startAction = (type: 'Move' | 'Pass') => {
     const wp = getWaypointByType(WaypointType[type]);
     if (!wp) return;
 
@@ -220,7 +271,7 @@ const Field: React.FC = () => {
     setActiveActions(prev => ({ ...prev, [type]: true }));
   };
 
-  const stopAction = (type: 'Move' | 'Shoot') => {
+  const stopAction = (type: 'Move' | 'Pass') => {
     if (type === 'Move') {
       topicsRef.current.moveTrigger?.setValue(false);
     } else {
@@ -240,21 +291,27 @@ const Field: React.FC = () => {
         )}
       </div>
       
-      <div className="relative w-full border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
+      <div ref={containerRef}
+           className="relative w-full border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
            style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
         <img 
-          ref={imageRef} 
-          src={fieldImage} 
-          alt="Field" 
-          onClick={handleFieldClick} 
-          className={`w-full h-full object-contain ${settingType ? 'cursor-crosshair' : ''}`}
-        />
+  ref={imageRef} 
+  src={fieldImage} 
+  alt="Field" 
+  onClick={handleFieldClick} 
+  // 1. This prevents the browser from trying to "drag" the image file
+  draggable="false" 
+  className={`w-full h-full object-contain select-none ${
+    settingType ? 'cursor-crosshair' : ''
+  }`}
+/>
         {waypoints.map((wp, i) => {
           const pixel = poseToPixel(wp.pose);
           return (
             <div key={i} 
-                 onClick={(e) => { e.stopPropagation(); setSelectedWaypointIndex(i); }}
-                 className={`absolute w-5 h-5 rounded-full border-2 cursor-pointer z-10 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
+                 onMouseDown={(e) => handleDragStart(e, i)}
+                 onTouchStart={(e) => handleDragStart(e, i)}
+                 className={`absolute w-6 h-6 rounded-full border-2 cursor-grab active:cursor-grabbing z-20 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
                  style={{ 
                    left: pixel.x, 
                    top: pixel.y, 
@@ -269,7 +326,7 @@ const Field: React.FC = () => {
       <div className="flex flex-col gap-4">
         {/* Waypoint Setting Buttons */}
         <div className="grid grid-cols-2 gap-4">
-          {(['Move', 'Shoot'] as WaypointType[]).map(type => (
+          {(['Move', 'Pass'] as WaypointType[]).map(type => (
             <button
               key={type}
               onClick={() => {
@@ -287,7 +344,7 @@ const Field: React.FC = () => {
           ))}
         </div>
         
-        {/* Action Buttons (Hold) */}
+        {/* Action Buttons */}
         <div className="flex flex-col gap-3">
           <button
             onMouseDown={() => startAction('Move')}
@@ -306,19 +363,15 @@ const Field: React.FC = () => {
           </button>
 
           <button
-            onMouseDown={() => startAction('Shoot')}
-            onMouseUp={() => stopAction('Shoot')}
-            onMouseLeave={() => activeActions.Shoot && stopAction('Shoot')}
-            onTouchStart={() => startAction('Shoot')}
-            onTouchEnd={() => stopAction('Shoot')}
-            disabled={!getWaypointByType(WaypointType.Shoot)}
+            onClick={() => activeActions.Pass ? stopAction('Pass') : startAction('Pass')}
+            disabled={!getWaypointByType(WaypointType.Pass)}
             className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
-              activeActions.Shoot 
+              activeActions.Pass 
                 ? 'bg-pink-500 text-black border-pink-400 scale-95' 
                 : 'bg-pink-700 text-white border-pink-600 hover:bg-pink-600 disabled:opacity-30 disabled:cursor-not-allowed'
             }`}
           >
-            {activeActions.Shoot ? 'Shooting...' : 'Shoot (HOLD)'}
+            {activeActions.Pass ? 'Passing...' : 'Custom Pass Location'}
           </button>
         </div>
 
