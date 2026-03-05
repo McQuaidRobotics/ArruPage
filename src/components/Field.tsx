@@ -5,13 +5,13 @@ import { NetworkTablesTopic, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 // A palette of distinct colors for locked waypoints
 const WAYPOINT_COLORS = {
-  Shoot: '#FF00FF', // Fuchsia
+  Pass: '#FF00FF', // Fuchsia
   Move: '#00FF00',  // Lime
   General: '#FFFF00' // Yellow
 } as const;
 
 export const WaypointType = {
-  Shoot: 'Shoot',
+  Pass: 'Pass',
   Move: 'Move',
   General: 'General',
 } as const;
@@ -237,14 +237,14 @@ const Field: React.FC = () => {
 
   const handleExport = () => {
     const moveWp = getWaypointByType(WaypointType.Move);
-    const shootWp = getWaypointByType(WaypointType.Shoot);
+    const passWp = getWaypointByType(WaypointType.Pass);
     
     const commands: string[] = [];
     if (moveWp) {
       commands.push(`DRIVE TO: ${moveWp.pose.x}, ${moveWp.pose.y}, ${moveWp.pose.theta}`);
     }
-    if (shootWp) {
-      commands.push(`AIM AT: ${shootWp.pose.x}, ${shootWp.pose.y}, ${shootWp.pose.theta}`);
+    if (passWp) {
+      commands.push(`AIM AT: ${passWp.pose.x}, ${passWp.pose.y}, ${passWp.pose.theta}`);
     }
     
     const exportString = commands.join('; ');
@@ -255,7 +255,7 @@ const Field: React.FC = () => {
     alert(`Exported: ${exportString}`);
   };
 
-  const startAction = (type: 'Move' | 'Shoot') => {
+  const startAction = (type: 'Move' | 'Pass') => {
     const wp = getWaypointByType(WaypointType[type]);
     if (!wp) return;
 
@@ -271,7 +271,7 @@ const Field: React.FC = () => {
     setActiveActions(prev => ({ ...prev, [type]: true }));
   };
 
-  const stopAction = (type: 'Move' | 'Shoot') => {
+  const stopAction = (type: 'Move' | 'Pass') => {
     if (type === 'Move') {
       topicsRef.current.moveTrigger?.setValue(false);
     } else {
@@ -326,7 +326,7 @@ const Field: React.FC = () => {
       <div className="flex flex-col gap-4">
         {/* Waypoint Setting Buttons */}
         <div className="grid grid-cols-2 gap-4">
-          {(['Move', 'Shoot'] as WaypointType[]).map(type => (
+          {(['Move', 'Pass'] as WaypointType[]).map(type => (
             <button
               key={type}
               onClick={() => {
@@ -344,7 +344,7 @@ const Field: React.FC = () => {
           ))}
         </div>
         
-        {/* Action Buttons (Hold) */}
+        {/* Action Buttons */}
         <div className="flex flex-col gap-3">
           <button
             onMouseDown={() => startAction('Move')}
@@ -363,19 +363,15 @@ const Field: React.FC = () => {
           </button>
 
           <button
-            onMouseDown={() => startAction('Shoot')}
-            onMouseUp={() => stopAction('Shoot')}
-            onMouseLeave={() => activeActions.Shoot && stopAction('Shoot')}
-            onTouchStart={() => startAction('Shoot')}
-            onTouchEnd={() => stopAction('Shoot')}
-            disabled={!getWaypointByType(WaypointType.Shoot)}
+            onClick={() => activeActions.Pass ? stopAction('Pass') : startAction('Pass')}
+            disabled={!getWaypointByType(WaypointType.Pass)}
             className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
-              activeActions.Shoot 
+              activeActions.Pass 
                 ? 'bg-pink-500 text-black border-pink-400 scale-95' 
                 : 'bg-pink-700 text-white border-pink-600 hover:bg-pink-600 disabled:opacity-30 disabled:cursor-not-allowed'
             }`}
           >
-            {activeActions.Shoot ? 'Shooting...' : 'Shoot (HOLD)'}
+            {activeActions.Pass ? 'Passing...' : 'Custom Pass Location'}
           </button>
         </div>
 
