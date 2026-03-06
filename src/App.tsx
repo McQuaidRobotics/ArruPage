@@ -9,6 +9,8 @@ import { NTClock } from './components/NTClock';
 import MapPage from './map/map';
 import { useState, useEffect } from 'react';
 
+import { NTBatteryBar } from './components/NTBatteryBar';
+
 const ConnectionStatus = () => {
   const { connected } = useNetworkTables();
   return (
@@ -77,7 +79,7 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-blue-400 uppercase tracking-wider">Sensor Data</h2>
             <div className="flex flex-col gap-4">
-              <NTNumberReadout topic="/dashboard/battery" label="Battery" unit="V" />
+              <NTBatteryBar topic="/dashboard/battery" label="Robot Battery" />
               <NTNumberReadout topic="/dashboard/time" label="Match Time" unit="s" precision={0} />
             </div>
           </div>
