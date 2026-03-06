@@ -97,7 +97,7 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
 }
 
 function App() {
-  const robotIp = '127.0.0.1'; 
+  const robotIp = '10.31.73.2'; 
   const [page, setPage] = useState<'dashboard' | 'map'>(() => {
     if (window.location.pathname === '/map') return 'map';
     return 'dashboard';
