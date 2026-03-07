@@ -26,13 +26,6 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 relative overflow-auto">
       <ConnectionStatus />
-
-      <div className="absolute top-4 left-4 flex items-center gap-2 z-50">
-        <button onClick={goToMap} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold transition-all active:scale-95 shadow-lg mr-2">Open Map</button>
-        <div className="ml-2">
-          <p className="text-sm text-gray-400 font-mono">Team 3173</p>
-        </div>
-      </div>
       
       <header className="mb-8 flex flex-col items-center text-center">
         <h1 className="text-3xl font-black text-white uppercase tracking-tighter">FRC Dashboard 2026</h1>
@@ -44,6 +37,16 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
       </header>
 
       <main className="space-y-8 max-w-7xl mx-auto pb-12">
+        {/* Main Navigation */}
+        <div className="text-center">
+            <button 
+              onClick={goToMap}
+              className="w-full max-w-sm px-8 py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl border-4 border-indigo-500/50 select-none active:scale-95 text-2xl"
+            >
+              Open Field Map
+            </button>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Toggle Buttons */}
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
