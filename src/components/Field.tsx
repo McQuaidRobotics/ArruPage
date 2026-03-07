@@ -295,7 +295,7 @@ const Field: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Field Map */}
         <div ref={containerRef}
-             className="relative flex-grow border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
+             className="relative flex-grow border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900 z-10" 
              style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
           <img 
             ref={imageRef} 
@@ -326,7 +326,7 @@ const Field: React.FC = () => {
         </div>
 
         {/* Right Sidebar: Waypoint Setting */}
-        <div className="lg:w-64 flex flex-col gap-4 shrink-0">
+        <div className="lg:w-64 flex flex-col gap-4 shrink-0 z-0">
           <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Waypoint Settings</h3>
           <div className="flex flex-col gap-4">
             {(['Move', 'Pass'] as WaypointType[]).map(type => (
