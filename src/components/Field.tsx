@@ -312,6 +312,36 @@ const Field: React.FC = () => {
               settingType ? 'cursor-crosshair' : ''
             }`}
           />
+          {/* Grid Lines Overlay */}
+          {dimensions && (
+            <div className="absolute inset-0 pointer-events-none">
+              {/* Vertical Lines - Centered around the middle line */}
+              {Array.from({ length: Math.floor(fieldLengthFeet / 5) * 2 }).map((_, i) => {
+                const gridInterval = 5;
+                const centerOffset = (fieldLengthFeet / 2) % gridInterval;
+                const xFeet = centerOffset + (i - Math.floor(fieldLengthFeet / 10)) * gridInterval;
+                if (xFeet < 0 || xFeet > fieldLengthFeet) return null;
+                const x = (xFeet / fieldLengthFeet) * dimensions.width;
+                return <div key={`v-${i}`} className="absolute top-0 bottom-0 w-px" style={{ left: x, backgroundColor: 'rgba(0, 0, 0, 0.5)' }} />;
+              })}
+
+              {/* Horizontal Lines - Centered around the middle line */}
+              {Array.from({ length: Math.floor(fieldWidthFeet / 5) * 2 }).map((_, i) => {
+                const gridInterval = 5;
+                const centerOffset = (fieldWidthFeet / 2) % gridInterval;
+                const yFeet = centerOffset + (i - Math.floor(fieldWidthFeet / 10)) * gridInterval;
+                if (yFeet < 0 || yFeet > fieldWidthFeet) return null;
+                const y = (yFeet / fieldWidthFeet) * dimensions.height;
+                return <div key={`h-${i}`} className="absolute left-0 right-0 h-px" style={{ top: y, backgroundColor: 'rgba(0, 0, 0, 0.5)' }} />;
+              })}
+              {/* Middle Line (Vertical at fieldLengthFeet / 2) */}
+              {(() => {
+                const middleXFeet = fieldLengthFeet / 2;
+                const middleX = (middleXFeet / fieldLengthFeet) * dimensions.width;
+                return <div key="v-middle" className="absolute top-0 bottom-0 w-0.5" style={{ left: middleX, backgroundColor: 'rgba(0, 0, 0, 0.9)' }} />;
+              })()}
+            </div>
+          )}
           {waypoints.map((wp, i) => {
             const pixel = poseToPixel(wp.pose);
             return (
