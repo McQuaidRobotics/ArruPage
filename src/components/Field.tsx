@@ -281,7 +281,7 @@ const Field: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-white">2026 FRC Field</h2>
         {settingType && (
@@ -291,61 +291,81 @@ const Field: React.FC = () => {
         )}
       </div>
       
-      <div ref={containerRef}
-           className="relative w-full border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
-           style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
-        <img 
-  ref={imageRef} 
-  src={fieldImage} 
-  alt="Field" 
-  onClick={handleFieldClick} 
-  // 1. This prevents the browser from trying to "drag" the image file
-  draggable="false" 
-  className={`w-full h-full object-contain select-none ${
-    settingType ? 'cursor-crosshair' : ''
-  }`}
-/>
-        {waypoints.map((wp, i) => {
-          const pixel = poseToPixel(wp.pose);
-          return (
-            <div key={i} 
-                 onMouseDown={(e) => handleDragStart(e, i)}
-                 onTouchStart={(e) => handleDragStart(e, i)}
-                 className={`absolute w-6 h-6 rounded-full border-2 cursor-grab active:cursor-grabbing z-20 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
-                 style={{ 
-                   left: pixel.x, 
-                   top: pixel.y, 
-                   backgroundColor: wp.color,
-                   transform: `translate(-50%, -50%) ${selectedWaypointIndex === i ? 'scale(1.2)' : 'scale(1)'}`
-                 }}
-            />
-          );
-        })}
+      {/* Field and Side Controls */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Field Map */}
+        <div ref={containerRef}
+             className="relative flex-grow border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
+             style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
+          <img 
+            ref={imageRef} 
+            src={fieldImage} 
+            alt="Field" 
+            onClick={handleFieldClick} 
+            draggable="false" 
+            className={`w-full h-full object-contain select-none ${
+              settingType ? 'cursor-crosshair' : ''
+            }`}
+          />
+          {waypoints.map((wp, i) => {
+            const pixel = poseToPixel(wp.pose);
+            return (
+              <div key={i} 
+                   onMouseDown={(e) => handleDragStart(e, i)}
+                   onTouchStart={(e) => handleDragStart(e, i)}
+                   className={`absolute w-6 h-6 rounded-full border-2 cursor-grab active:cursor-grabbing z-20 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
+                   style={{ 
+                     left: pixel.x, 
+                     top: pixel.y, 
+                     backgroundColor: wp.color,
+                     transform: `translate(-50%, -50%) ${selectedWaypointIndex === i ? 'scale(1.2)' : 'scale(1)'}`
+                   }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Right Sidebar: Waypoint Setting */}
+        <div className="lg:w-64 flex flex-col gap-4 shrink-0">
+          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Waypoint Settings</h3>
+          <div className="flex flex-col gap-4">
+            {(['Move', 'Pass'] as WaypointType[]).map(type => (
+              <button
+                key={type}
+                onClick={() => {
+                  if (getWaypointByType(type)) {
+                    setWaypoints(prev => prev.filter(wp => wp.type !== type));
+                    setSettingType(type);
+                  } else {
+                    setSettingType(prev => prev === type ? null : type);
+                  }
+                }}
+                className={`w-full px-4 py-6 text-base font-black uppercase tracking-tighter rounded-xl transition-all border-2 shadow-lg ${
+                  settingType === type 
+                    ? 'bg-yellow-500 text-black border-yellow-400 scale-95 shadow-yellow-500/20' 
+                    : 'bg-gray-800 text-white border-gray-700 hover:bg-gray-700 hover:border-gray-600'
+                }`}
+              >
+                {getWaypointByType(type) ? `Reset ${type}` : `Set ${type}`}
+              </button>
+            ))}
+          </div>
+          
+          {/* Export Button moved here too for utility */}
+          <button
+            onClick={handleExport}
+            disabled={waypoints.length === 0}
+            className="w-full mt-4 py-3 bg-blue-900/40 hover:bg-blue-800/60 disabled:bg-gray-800/20 disabled:text-gray-600 text-blue-300 font-bold rounded-lg transition-all active:scale-[0.98] border border-blue-500/30 text-xs"
+          >
+            Export All Waypoints
+          </button>
+        </div>
       </div>
 
+      {/* Large Bottom Action Buttons */}
       <div className="flex flex-col gap-4">
-        {/* Waypoint Setting Buttons */}
-        <div className="grid grid-cols-2 gap-4">
-          {(['Move', 'Pass'] as WaypointType[]).map(type => (
-            <button
-              key={type}
-              onClick={() => {
-                if (getWaypointByType(type)) {
-                  setWaypoints(prev => prev.filter(wp => wp.type !== type));
-                  setSettingType(type);
-                } else {
-                  setSettingType(prev => prev === type ? null : type);
-                }
-              }}
-              className={`px-3 py-3 text-sm font-bold rounded-lg transition-colors ${settingType === type ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
-            >
-              {getWaypointByType(type) ? `Reset ${type}` : `Set ${type}`}
-            </button>
-          ))}
-        </div>
-        
         {/* Action Buttons */}
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onMouseDown={() => startAction('Move')}
             onMouseUp={() => stopAction('Move')}
@@ -353,10 +373,10 @@ const Field: React.FC = () => {
             onTouchStart={() => startAction('Move')}
             onTouchEnd={() => stopAction('Move')}
             disabled={!getWaypointByType(WaypointType.Move)}
-            className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
+            className={`w-full py-8 text-2xl font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl border-4 select-none ${
               activeActions.Move 
                 ? 'bg-green-500 text-black border-green-400 scale-95' 
-                : 'bg-green-700 text-white border-green-600 hover:bg-green-600 disabled:opacity-30 disabled:cursor-not-allowed'
+                : 'bg-green-700 text-white border-green-600 hover:bg-green-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-green-900/20'
             }`}
           >
             {activeActions.Move ? 'Driving...' : 'Drive To (HOLD)'}
@@ -365,24 +385,15 @@ const Field: React.FC = () => {
           <button
             onClick={() => activeActions.Pass ? stopAction('Pass') : startAction('Pass')}
             disabled={!getWaypointByType(WaypointType.Pass)}
-            className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
+            className={`w-full py-8 text-2xl font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl border-4 select-none ${
               activeActions.Pass 
                 ? 'bg-pink-500 text-black border-pink-400 scale-95' 
-                : 'bg-pink-700 text-white border-pink-600 hover:bg-pink-600 disabled:opacity-30 disabled:cursor-not-allowed'
+                : 'bg-pink-700 text-white border-pink-600 hover:bg-pink-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-pink-900/20'
             }`}
           >
             {activeActions.Pass ? 'Passing...' : 'Custom Pass Location'}
           </button>
         </div>
-
-        {/* Export Button */}
-        <button
-          onClick={handleExport}
-          disabled={waypoints.length === 0}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold rounded-lg transition-all active:scale-[0.98] border border-blue-400/20"
-        >
-          Export Waypoints String
-        </button>
       </div>
 
       {selectedWaypointIndex !== null && waypoints[selectedWaypointIndex] && (
