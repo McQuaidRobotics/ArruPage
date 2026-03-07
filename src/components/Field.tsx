@@ -368,11 +368,24 @@ const Field: React.FC = () => {
               <button
                 key={type}
                 onClick={() => {
-                  if (getWaypointByType(type)) {
-                    setWaypoints(prev => prev.filter(wp => wp.type !== type));
-                    setSettingType(type);
-                  } else {
-                    setSettingType(prev => prev === type ? null : type);
+                  const currentWaypoint = getWaypointByType(type);
+
+                  if (type === 'Pass') {
+                    if (activeActions.Pass) { // If robot is actively passing, always reset
+                      setWaypoints(prev => prev.filter(wp => wp.type !== type)); // Remove waypoint
+                      stopAction('Pass'); // Stop the action
+                      setSettingType(type); // Allow setting new one
+                    } else { // Pass waypoint exists, but not actively passing.
+                      // Don't remove the waypoint. Just toggle setting mode.
+                      setSettingType(prev => prev === type ? null : type);
+                    }
+                  } else { // type is 'Move' - keep existing behavior (always reset if exists)
+                    if (currentWaypoint) {
+                      setWaypoints(prev => prev.filter(wp => wp.type !== type));
+                      setSettingType(type);
+                    } else {
+                      setSettingType(prev => prev === type ? null : type);
+                    }
                   }
                 }}
                 className={`w-full px-4 py-6 text-base font-black uppercase tracking-tighter rounded-xl transition-all border-2 shadow-lg ${
