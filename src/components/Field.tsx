@@ -248,7 +248,7 @@ const Field: React.FC = () => {
       commands.push(`DRIVE TO: ${moveWp.pose.x}, ${moveWp.pose.y}, ${moveWp.pose.theta}`);
     }
     if (passWp) {
-      commands.push(`AIM AT: ${passWp.pose.x}, ${passWp.pose.y}, ${passWp.pose.theta}`);
+      commands.push(`AIM AT: ${passWp.pose.x}, ${passWp.pose.y}, ${passWp.pose.theta}; PASS HEIGHT: ${passHeight}`);
     }
     
     const exportString = commands.join('; ');
@@ -259,6 +259,7 @@ const Field: React.FC = () => {
     alert(`Exported: ${exportString}`);
   };
 
+  // Note: The passHeight is read by robot code. This function only triggers the action.
   const startAction = (type: 'Move' | 'Pass') => {
     const wp = getWaypointByType(WaypointType[type]);
     if (!wp) return;
