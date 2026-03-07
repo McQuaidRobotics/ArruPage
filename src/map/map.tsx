@@ -13,8 +13,8 @@ const MapPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <p className="text-sm text-gray-500">Automatically updates from the simulation</p>
       </header>
 
-      <main className="max-w-6xl mx-auto">
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+      <main className="max-w-full mx-auto px-2">
+        <div className="bg-gray-800 p-8 rounded-2xl border border-gray-700 shadow-2xl">
           <Field />
         </div>
       </main>
