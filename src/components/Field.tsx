@@ -35,6 +35,7 @@ const Field: React.FC = () => {
   const [settingType, setSettingType] = useState<WaypointType | null>(null);
   const [activeActions, setActiveActions] = useState<{ [key: string]: boolean }>({});
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [passHeight, setPassHeight] = useState(0);
 
   const fieldLengthFeet = 57.5; // X-axis
   const fieldWidthFeet = 26.4;  // Y-axis
@@ -50,6 +51,7 @@ const Field: React.FC = () => {
     moveTrigger?: NetworkTablesTopic<boolean>;
     passX?: NetworkTablesTopic<number>;
     passY?: NetworkTablesTopic<number>;
+    passHeight?: NetworkTablesTopic<number>;
     passTrigger?: NetworkTablesTopic<boolean>;
   }>({});
 
@@ -80,6 +82,7 @@ const Field: React.FC = () => {
       moveTrigger: nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean),
       passX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
       passY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
+      passHeight: nt.createTopic<number>('/dashboard/robot/passHeight', NetworkTablesTypeInfos.kDouble),
       passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
     };
 
@@ -88,6 +91,7 @@ const Field: React.FC = () => {
     const setup = async () => {
       try {
         await Promise.all(Object.values(ntTopics).map(t => t.publish()));
+        ntTopics.passHeight.setValue(passHeight);
       } catch (e) {
         console.warn("Failed to publish some topics", e);
       }
@@ -359,6 +363,33 @@ const Field: React.FC = () => {
           >
             Export All Waypoints
           </button>
+
+          {/* Pass Height Slider */}
+          <div className="mt-6 p-5 bg-gray-900/50 rounded-xl border border-gray-700 shadow-lg">
+            <div className="flex justify-between items-center mb-3">
+              <label htmlFor="passHeight" className="text-base font-bold text-gray-200">Pass Height</label>
+              <span className="px-3 py-1 bg-gray-700 text-white font-mono text-base rounded-md">{passHeight} ft</span>
+            </div>
+            <input
+              type="range"
+              id="passHeight"
+              min="0"
+              max="15"
+              step="1"
+              value={passHeight}
+              onChange={(e) => {
+                const newHeight = parseInt(e.target.value, 10);
+                setPassHeight(newHeight);
+                topicsRef.current.passHeight?.setValue(newHeight);
+              }}
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
+            />
+            <div className="flex justify-between text-[10px] text-gray-500 font-mono mt-2 px-1">
+              <span>0ft</span>
+              <span>7.5ft</span>
+              <span>15ft</span>
+            </div>
+          </div>
         </div>
       </div>
 
