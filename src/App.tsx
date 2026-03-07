@@ -105,6 +105,7 @@ function App() {
     if (window.location.pathname === '/map') return 'map';
     return 'dashboard';
   });
+  const [refreshKey, setRefreshKey] = useState(Date.now());
 
   // Handle browser back/forward buttons
   useEffect(() => {
@@ -119,6 +120,7 @@ function App() {
 
   const goToMap = () => {
     setPage('map');
+    setRefreshKey(Date.now()); // Explicitly trigger a refresh
     window.history.pushState({}, '', '/map');
   };
 
@@ -134,7 +136,7 @@ function App() {
   const renderPage = () => {
     switch (page) {
       case 'map':
-        return <MapPage onBack={goBack} />;
+        return <MapPage onBack={goBack} refreshKey={refreshKey} />;
       default:
         return <Dashboard goToMap={goToMap} />;
     }
