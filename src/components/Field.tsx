@@ -201,6 +201,9 @@ const Field: React.FC = () => {
   };
 
   const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
+    const wp = waypoints[index];
+    if (activeActions[wp.type]) return; // Prevent drag if active
+
     e.stopPropagation();
     setDraggingIndex(index);
     setSelectedWaypointIndex(index);
@@ -338,11 +341,16 @@ const Field: React.FC = () => {
           )}
           {waypoints.map((wp, i) => {
             const pixel = poseToPixel(wp.pose);
+            const isActive = activeActions[wp.type];
             return (
               <div key={i} 
                    onMouseDown={(e) => handleDragStart(e, i)}
                    onTouchStart={(e) => handleDragStart(e, i)}
-                   className={`absolute w-6 h-6 rounded-full border-2 cursor-grab active:cursor-grabbing z-20 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
+                   className={`absolute w-6 h-6 rounded-full border-2 z-20 transition-transform ${
+                     isActive 
+                       ? 'cursor-not-allowed opacity-80' 
+                       : 'cursor-grab active:cursor-grabbing hover:scale-125'
+                   } ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
                    style={{ 
                      left: pixel.x, 
                      top: pixel.y, 
