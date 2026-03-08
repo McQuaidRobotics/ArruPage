@@ -36,6 +36,7 @@ const Field: React.FC = () => {
   const [activeActions, setActiveActions] = useState<{ [key: string]: boolean }>({});
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [passHeight, setPassHeight] = useState(0);
+  const [robotPose, setRobotPose] = useState<{ x: number; y: number; theta: number } | null>(null);
 
   const fieldLengthFeet = 57.5; // X-axis
   const fieldWidthFeet = 26.4;  // Y-axis
@@ -43,6 +44,7 @@ const Field: React.FC = () => {
   // Topic Refs
   const topicsRef = useRef<{
     waypoints?: NetworkTablesTopic<string>;
+    robotPose?: NetworkTablesTopic<number[]>;
     export?: NetworkTablesTopic<string>;
     clickX?: NetworkTablesTopic<number>;
     clickY?: NetworkTablesTopic<number>;
@@ -74,6 +76,7 @@ const Field: React.FC = () => {
 
     const ntTopics = {
       waypoints: nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString),
+      robotPose: nt.createTopic<number[]>('/SmartDashboard/Field/Robot', NetworkTablesTypeInfos.kDoubleArray, []),
       export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
       clickX: nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble),
       clickY: nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble),
@@ -91,7 +94,7 @@ const Field: React.FC = () => {
     const setup = async () => {
       try {
         await Promise.all(Object.values(ntTopics).map(t => t.publish()));
-        ntTopics.passHeight.setValue(passHeight);
+        ntTopics.passHeight.setValue(passHeight); // THIS IS THE LINE THAT WAS MISSED
       } catch (e) {
         console.warn("Failed to publish some topics", e);
       }
@@ -99,7 +102,7 @@ const Field: React.FC = () => {
 
     setup();
 
-    const subuid = ntTopics.waypoints.subscribe((val) => {
+    const waypointSub = ntTopics.waypoints.subscribe((val) => {
       if (!val) return;
       try {
         const parsed = JSON.parse(val);
@@ -107,27 +110,26 @@ const Field: React.FC = () => {
         
         const mapped: Waypoint[] = parsed.map((p: { pose?: { x: number; y: number; theta?: number }; color?: string; type?: WaypointType }) => ({
           status: 'locked',
-          pose: {
-            x: p.pose?.x ?? 0,
-            y: p.pose?.y ?? 0,
-            theta: p.pose?.theta ?? 0
-          },
+          pose: { x: p.pose?.x ?? 0, y: p.pose?.y ?? 0, theta: p.pose?.theta ?? 0 },
           color: p.color ?? WAYPOINT_COLORS.General,
           type: p.type ?? WaypointType.General,
         }));
 
-        setWaypoints(prev => {
-          const currentStr = JSON.stringify(prev.map(wp => ({ pose: wp.pose, type: wp.type })));
-          const newStr = JSON.stringify(mapped.map(wp => ({ pose: wp.pose, type: wp.type })));
-          return currentStr === newStr ? prev : mapped;
-        });
-      } catch (e) {
-        console.error('Failed to parse waypoints', e);
+        setWaypoints(prev => JSON.stringify(prev.map(wp => ({ pose: wp.pose, type: wp.type }))) === JSON.stringify(mapped.map(wp => ({ pose: wp.pose, type: wp.type }))) ? prev : mapped);
+      } catch (e) { console.error('Failed to parse waypoints', e); }
+    });
+
+    const robotPoseSub = ntTopics.robotPose.subscribe((val) => {
+      if (val && val.length >= 3) {
+        setRobotPose({ x: val[0], y: val[1], theta: val[2] });
+      } else {
+        setRobotPose(null); // Set to null if data is invalid or missing
       }
     });
 
     return () => {
-      ntTopics.waypoints.unsubscribe(subuid);
+      ntTopics.waypoints.unsubscribe(waypointSub);
+      ntTopics.robotPose.unsubscribe(robotPoseSub);
       Object.values(ntTopics).forEach(t => t.unpublish());
       topicsRef.current = {};
     };
@@ -259,7 +261,6 @@ const Field: React.FC = () => {
     alert(`Exported: ${exportString}`);
   };
 
-  // Note: The passHeight is read by robot code. This function only triggers the action.
   const startAction = (type: 'Move' | 'Pass') => {
     const wp = getWaypointByType(WaypointType[type]);
     if (!wp) return;
@@ -296,9 +297,7 @@ const Field: React.FC = () => {
         )}
       </div>
       
-      {/* Field and Side Controls */}
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Field Map */}
         <div ref={containerRef}
              className="relative flex-grow border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900 z-10" 
              style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
@@ -312,10 +311,8 @@ const Field: React.FC = () => {
               settingType ? 'cursor-crosshair' : ''
             }`}
           />
-          {/* Grid Lines Overlay */}
           {dimensions && (
             <div className="absolute inset-0 pointer-events-none">
-              {/* Vertical Lines - Centered around the middle line */}
               {Array.from({ length: Math.floor(fieldLengthFeet / 5) * 2 }).map((_, i) => {
                 const gridInterval = 5;
                 const centerOffset = (fieldLengthFeet / 2) % gridInterval;
@@ -324,8 +321,6 @@ const Field: React.FC = () => {
                 const x = (xFeet / fieldLengthFeet) * dimensions.width;
                 return <div key={`v-${i}`} className="absolute top-0 bottom-0 w-px" style={{ left: x, backgroundColor: 'rgba(0, 0, 0, 0.5)' }} />;
               })}
-
-              {/* Horizontal Lines - Centered around the middle line */}
               {Array.from({ length: Math.floor(fieldWidthFeet / 5) * 2 }).map((_, i) => {
                 const gridInterval = 5;
                 const centerOffset = (fieldWidthFeet / 2) % gridInterval;
@@ -334,7 +329,6 @@ const Field: React.FC = () => {
                 const y = (yFeet / fieldWidthFeet) * dimensions.height;
                 return <div key={`h-${i}`} className="absolute left-0 right-0 h-px" style={{ top: y, backgroundColor: 'rgba(0, 0, 0, 0.5)' }} />;
               })}
-              {/* Middle Line (Vertical at fieldLengthFeet / 2) */}
               {(() => {
                 const middleXFeet = fieldLengthFeet / 2;
                 const middleX = (middleXFeet / fieldLengthFeet) * dimensions.width;
@@ -358,9 +352,25 @@ const Field: React.FC = () => {
               />
             );
           })}
+          {robotPose && dimensions && (() => {
+            const pixel = poseToPixel(robotPose);
+            return (
+              <div
+                className="absolute w-8 h-8 z-30"
+                style={{
+                  left: pixel.x,
+                  top: pixel.y,
+                  transform: `translate(-50%, -50%) rotate(${robotPose.theta}deg)`,
+                }}
+              >
+                <svg className="w-full h-full" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L3 22H21L12 2Z" fill="rgba(0, 150, 255, 0.7)" stroke="white" strokeWidth="1.5" />
+                </svg>
+              </div>
+            );
+          })()}
         </div>
 
-        {/* Right Sidebar: Waypoint Setting */}
         <div className="lg:w-64 flex flex-col gap-4 shrink-0 z-0">
           <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Waypoint Settings</h3>
           <div className="flex flex-col gap-4">
@@ -371,15 +381,14 @@ const Field: React.FC = () => {
                   const currentWaypoint = getWaypointByType(type);
 
                   if (type === 'Pass') {
-                    if (activeActions.Pass) { // If robot is actively passing, always reset
-                      setWaypoints(prev => prev.filter(wp => wp.type !== type)); // Remove waypoint
-                      stopAction('Pass'); // Stop the action
-                      setSettingType(type); // Allow setting new one
-                    } else { // Pass waypoint exists, but not actively passing.
-                      // Don't remove the waypoint. Just toggle setting mode.
+                    if (activeActions.Pass) {
+                      setWaypoints(prev => prev.filter(wp => wp.type !== type));
+                      stopAction('Pass');
+                      setSettingType(type);
+                    } else {
                       setSettingType(prev => prev === type ? null : type);
                     }
-                  } else { // type is 'Move' - keep existing behavior (always reset if exists)
+                  } else {
                     if (currentWaypoint) {
                       setWaypoints(prev => prev.filter(wp => wp.type !== type));
                       setSettingType(type);
@@ -399,7 +408,6 @@ const Field: React.FC = () => {
             ))}
           </div>
           
-          {/* Export Button moved here too for utility */}
           <button
             onClick={handleExport}
             disabled={waypoints.length === 0}
@@ -408,7 +416,6 @@ const Field: React.FC = () => {
             Export All Waypoints
           </button>
 
-          {/* Pass Height Slider */}
           <div className="mt-6 p-5 bg-gray-900/50 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex justify-between items-center mb-3">
               <label htmlFor="passHeight" className="text-base font-bold text-gray-200">Pass Height</label>
@@ -437,9 +444,7 @@ const Field: React.FC = () => {
         </div>
       </div>
 
-      {/* Large Bottom Action Buttons */}
       <div className="flex flex-col gap-4">
-        {/* Action Buttons */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onMouseDown={() => startAction('Move')}
@@ -471,40 +476,6 @@ const Field: React.FC = () => {
         </div>
       </div>
 
-      {selectedWaypointIndex !== null && waypoints[selectedWaypointIndex] && (
-        <div className="p-4 bg-gray-800 rounded-lg border-l-4 border-blue-500 flex justify-between items-center">
-          <div>
-            <h3 className="font-bold">{waypoints[selectedWaypointIndex].type} Waypoint</h3>
-            <p className="text-sm text-gray-400">
-              X: {waypoints[selectedWaypointIndex].pose.x} ft, 
-              Y: {waypoints[selectedWaypointIndex].pose.y} ft, 
-              θ: {waypoints[selectedWaypointIndex].pose.theta}°
-            </p>
-          </div>
-          <button onClick={() => setSelectedWaypointIndex(null)} className="text-gray-500 hover:text-white">Close</button>
-        </div>
-      )}
-
-      {waypoints.length > 0 && (
-        <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
-          <h3 className="text-lg font-bold text-white mb-3">Active Waypoints</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {waypoints.map((wp, index) => (
-              <div key={index} 
-                   onClick={() => setSelectedWaypointIndex(index)}
-                   className={`flex items-center justify-between p-2 rounded bg-gray-900/50 border cursor-pointer transition-colors ${selectedWaypointIndex === index ? 'border-blue-500 bg-gray-900' : 'border-gray-700 hover:border-gray-600'}`}>
-                <div className="flex items-center gap-2">
-                  <div style={{ backgroundColor: wp.color }} className="w-3 h-3 rounded-full shadow-sm" />
-                  <span className="font-semibold text-sm">{wp.type}</span>
-                </div>
-                <div className="font-mono text-xs text-gray-400">
-                  ({wp.pose.x.toFixed(1)}, {wp.pose.y.toFixed(1)}, {wp.pose.theta.toFixed(0)}°)
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
