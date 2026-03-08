@@ -388,8 +388,8 @@ const Field: React.FC = () => {
                     if (type === 'Move' && activeActions.Move) stopAction('Move');
                     if (type === 'Pass' && activeActions.Pass) stopAction('Pass');
                     
-                    // Clear setting type
-                    setSettingType(null);
+                    // Immediately re-enter setting mode for this type
+                    setSettingType(type);
                   } else {
                     // Toggle setting mode
                     setSettingType(prev => prev === type ? null : type);
