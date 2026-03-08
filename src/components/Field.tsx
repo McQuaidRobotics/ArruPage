@@ -380,21 +380,19 @@ const Field: React.FC = () => {
                 onClick={() => {
                   const currentWaypoint = getWaypointByType(type);
 
-                  if (type === 'Pass') {
-                    if (activeActions.Pass) {
-                      setWaypoints(prev => prev.filter(wp => wp.type !== type));
-                      stopAction('Pass');
-                      setSettingType(type);
-                    } else {
-                      setSettingType(prev => prev === type ? null : type);
-                    }
+                  if (currentWaypoint) {
+                    // Remove the waypoint
+                    setWaypoints(prev => prev.filter(wp => wp.type !== type));
+                    
+                    // Stop any active actions associated with this type
+                    if (type === 'Move' && activeActions.Move) stopAction('Move');
+                    if (type === 'Pass' && activeActions.Pass) stopAction('Pass');
+                    
+                    // Clear setting type
+                    setSettingType(null);
                   } else {
-                    if (currentWaypoint) {
-                      setWaypoints(prev => prev.filter(wp => wp.type !== type));
-                      setSettingType(type);
-                    } else {
-                      setSettingType(prev => prev === type ? null : type);
-                    }
+                    // Toggle setting mode
+                    setSettingType(prev => prev === type ? null : type);
                   }
                 }}
                 className={`w-full px-4 py-6 text-base font-black uppercase tracking-tighter rounded-xl transition-all border-2 shadow-lg ${
