@@ -3,7 +3,7 @@ import Field from '../components/Field';
 
 const MapPage: React.FC<{ onBack: () => void; refreshKey: number }> = ({ onBack, refreshKey }) => {
   return (
-    <div className="min-h-screen bg-gray-900 text-white relative">
+    <div className="min-h-screen bg-gray-900 text-white relative overflow-auto p-4">
       <div className="absolute top-4 left-4 z-50">
         <button onClick={onBack} className="px-3 py-1 bg-gray-800/70 hover:bg-gray-700 rounded-md text-sm transition-colors active:scale-95">Back</button>
       </div>

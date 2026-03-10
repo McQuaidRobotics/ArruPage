@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { NetworkTablesProvider } from './NetworkTablesContext';
 import { useNetworkTables } from './useNetworkTables';
 import { NTButton } from './components/NTButton';
@@ -6,15 +7,49 @@ import { NTMomentaryButton } from './components/NTMomentaryButton';
 import { NTNumberReadout } from './components/NTNumberReadout';
 import { NTSlider } from './components/NTSlider';
 import { NTClock } from './components/NTClock';
-import MapPage from './map/map';
-import { useState, useEffect } from 'react';
-
 import { NTBatteryBar } from './components/NTBatteryBar';
+import MapPage from './map/map';
+
+// Simple Error Boundary to catch and display crashes
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Dashboard Crash:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-black text-red-500 p-10 flex flex-col items-center justify-center">
+          <h1 className="text-4xl font-black mb-4 uppercase">Something went wrong</h1>
+          <pre className="bg-gray-900 p-4 rounded-xl border border-red-500/30 text-xs overflow-auto max-w-full">
+            {this.state.error?.toString()}
+          </pre>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-8 px-6 py-3 bg-red-600 text-white rounded-full font-bold uppercase tracking-widest hover:bg-red-500 transition-colors"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const ConnectionStatus = () => {
   const { connected } = useNetworkTables();
   return (
-    <div className={`fixed top-4 right-4 px-3 py-1 rounded-full text-sm font-medium ${
+    <div className={`fixed top-4 right-4 px-3 py-1 rounded-full text-sm font-medium z-[100] ${
       connected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
     }`}>
       {connected ? '● Connected' : '○ Disconnected'}
@@ -105,7 +140,6 @@ function App() {
     if (window.location.pathname === '/map') return 'map';
     return 'dashboard';
   });
-  const [refreshKey, setRefreshKey] = useState(Date.now());
 
   // Handle browser back/forward buttons
   useEffect(() => {
@@ -119,35 +153,30 @@ function App() {
   }, []);
 
   const goToMap = () => {
-    setPage('map');
-    setRefreshKey(Date.now()); // Explicitly trigger a refresh
     window.history.pushState({}, '', '/map');
+    setPage('map');
+    window.scrollTo(0, 0);
   };
-
-
 
   const goBack = () => {
+    window.history.pushState({}, '', '/');
     setPage('dashboard');
-    if (window.location.pathname === '/map' || window.location.pathname === '/climb') {
-      window.history.pushState({}, '', '/');
-    }
-  };
-
-  const renderPage = () => {
-    switch (page) {
-      case 'map':
-        return <MapPage onBack={goBack} refreshKey={refreshKey} />;
-      default:
-        return <Dashboard goToMap={goToMap} />;
-    }
+    window.scrollTo(0, 0);
   };
 
   return (
-    <NetworkTablesProvider robotIp={robotIp}>
-      <div className="min-h-screen bg-gray-900 overflow-hidden">
-        {renderPage()}
-      </div>
-    </NetworkTablesProvider>
+    <ErrorBoundary>
+      <NetworkTablesProvider robotIp={robotIp}>
+        <div className="min-h-screen bg-gray-900 text-white">
+          <div className={page === 'dashboard' ? 'block' : 'hidden'}>
+            <Dashboard goToMap={goToMap} />
+          </div>
+          <div className={page === 'map' ? 'block' : 'hidden'}>
+            <MapPage onBack={goBack} refreshKey={0} />
+          </div>
+        </div>
+      </NetworkTablesProvider>
+    </ErrorBoundary>
   );
 }
 

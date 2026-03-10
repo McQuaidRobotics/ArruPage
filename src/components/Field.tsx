@@ -74,27 +74,37 @@ const Field: React.FC = () => {
   useEffect(() => {
     if (!nt || !connected) return;
 
-    const ntTopics = {
-      waypoints: nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString),
-      robotPose: nt.createTopic<number[]>('/SmartDashboard/Field/Robot', NetworkTablesTypeInfos.kDoubleArray, []),
-      export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
-      clickX: nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble),
-      clickY: nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble),
-      moveX: nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble),
-      moveY: nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble),
-      moveTrigger: nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean),
-      passX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
-      passY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
-      passHeight: nt.createTopic<number>('/dashboard/robot/passHeight', NetworkTablesTypeInfos.kDouble),
-      passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
-    };
+    let isMounted = true;
+    let ntTopics: any = null;
 
-    topicsRef.current = ntTopics;
+    try {
+      ntTopics = {
+        waypoints: nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString),
+        robotPose: nt.createTopic<number[]>('/SmartDashboard/Field/Robot', NetworkTablesTypeInfos.kDoubleArray, []),
+        export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
+        clickX: nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble),
+        clickY: nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble),
+        moveX: nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble),
+        moveY: nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble),
+        moveTrigger: nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean),
+        passX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
+        passY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
+        passHeight: nt.createTopic<number>('/dashboard/robot/passHeight', NetworkTablesTypeInfos.kDouble),
+        passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
+      };
+
+      topicsRef.current = ntTopics;
+    } catch (e) {
+      console.error("Failed to create topics:", e);
+      return;
+    }
 
     const setup = async () => {
       try {
-        await Promise.all(Object.values(ntTopics).map(t => t.publish()));
-        ntTopics.passHeight.setValue(passHeight); // THIS IS THE LINE THAT WAS MISSED
+        await Promise.all(Object.values(ntTopics).map((t: any) => t.publish()));
+        if (isMounted && ntTopics.passHeight) {
+          ntTopics.passHeight.setValue(passHeight);
+        }
       } catch (e) {
         console.warn("Failed to publish some topics", e);
       }
@@ -102,13 +112,13 @@ const Field: React.FC = () => {
 
     setup();
 
-    const waypointSub = ntTopics.waypoints.subscribe((val) => {
-      if (!val) return;
+    const waypointSub = ntTopics.waypoints.subscribe((val: string) => {
+      if (!val || !isMounted) return;
       try {
         const parsed = JSON.parse(val);
         if (!Array.isArray(parsed)) return;
         
-        const mapped: Waypoint[] = parsed.map((p: { pose?: { x: number; y: number; theta?: number }; color?: string; type?: WaypointType }) => ({
+        const mapped: Waypoint[] = parsed.map((p: any) => ({
           status: 'locked',
           pose: { x: p.pose?.x ?? 0, y: p.pose?.y ?? 0, theta: p.pose?.theta ?? 0 },
           color: p.color ?? WAYPOINT_COLORS.General,
@@ -119,18 +129,24 @@ const Field: React.FC = () => {
       } catch (e) { console.error('Failed to parse waypoints', e); }
     });
 
-    const robotPoseSub = ntTopics.robotPose.subscribe((val) => {
+    const robotPoseSub = ntTopics.robotPose.subscribe((val: number[]) => {
+      if (!isMounted) return;
       if (val && val.length >= 3) {
         setRobotPose({ x: val[0], y: val[1], theta: val[2] });
       } else {
-        setRobotPose(null); // Set to null if data is invalid or missing
+        setRobotPose(null);
       }
     });
 
     return () => {
-      ntTopics.waypoints.unsubscribe(waypointSub);
-      ntTopics.robotPose.unsubscribe(robotPoseSub);
-      Object.values(ntTopics).forEach(t => t.unpublish());
+      isMounted = false;
+      if (ntTopics) {
+        ntTopics.waypoints.unsubscribe(waypointSub);
+        ntTopics.robotPose.unsubscribe(robotPoseSub);
+        Object.values(ntTopics).forEach((t: any) => {
+          try { t.unpublish(); } catch(e) {}
+        });
+      }
       topicsRef.current = {};
     };
   }, [nt, connected]);
