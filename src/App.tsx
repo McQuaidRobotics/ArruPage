@@ -60,7 +60,6 @@ const ConnectionStatus = () => {
 function Dashboard({ goToMap }: { goToMap: () => void }) {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 relative overflow-auto">
-      <ConnectionStatus />
       
       <header className="mb-8 flex flex-col items-center text-center">
         <h1 className="text-3xl font-black text-white uppercase tracking-tighter">FRC Dashboard 2026</h1>
@@ -168,6 +167,7 @@ function App() {
     <ErrorBoundary>
       <NetworkTablesProvider robotIp={robotIp}>
         <div className="min-h-screen bg-gray-900 text-white">
+          <ConnectionStatus />
           <div className={page === 'dashboard' ? 'block' : 'hidden'}>
             <Dashboard goToMap={goToMap} />
           </div>
