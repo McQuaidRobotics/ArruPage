@@ -134,8 +134,9 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
 }
 
 function App() {
-  const robotIp = '127.0.0.1'; 
+  const robotIps = ['10.31.73.2', '127.0.0.1']; 
   const [page, setPage] = useState<'dashboard' | 'map'>(() => {
+
     if (window.location.pathname === '/map') return 'map';
     return 'dashboard';
   });
@@ -165,7 +166,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <NetworkTablesProvider robotIp={robotIp}>
+      <NetworkTablesProvider robotIps={robotIps}>
         <div className="min-h-screen bg-gray-900 text-white">
           <ConnectionStatus />
           <div className={page === 'dashboard' ? 'block' : 'hidden'}>
