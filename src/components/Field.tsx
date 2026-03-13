@@ -45,7 +45,6 @@ const Field: React.FC = () => {
   const topicsRef = useRef<{
     waypoints?: NetworkTablesTopic<string>;
     robotPose?: NetworkTablesTopic<number[]>;
-    export?: NetworkTablesTopic<string>;
     clickX?: NetworkTablesTopic<number>;
     clickY?: NetworkTablesTopic<number>;
     moveX?: NetworkTablesTopic<number>;
@@ -81,7 +80,6 @@ const Field: React.FC = () => {
       ntTopics = {
         waypoints: nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString),
         robotPose: nt.createTopic<number[]>('/SmartDashboard/Field/Robot', NetworkTablesTypeInfos.kDoubleArray, []),
-        export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
         clickX: nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble),
         clickY: nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble),
         moveX: nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble),
@@ -260,26 +258,6 @@ const Field: React.FC = () => {
     };
   }, [draggingIndex]);
 
-  const handleExport = () => {
-    const moveWp = getWaypointByType(WaypointType.Move);
-    const passWp = getWaypointByType(WaypointType.Pass);
-    
-    const commands: string[] = [];
-    if (moveWp) {
-      commands.push(`DRIVE TO: ${moveWp.pose.x}, ${moveWp.pose.y}, ${moveWp.pose.theta}`);
-    }
-    if (passWp) {
-      commands.push(`AIM AT: ${passWp.pose.x}, ${passWp.pose.y}, ${passWp.pose.theta}; PASS HEIGHT: ${passHeight}`);
-    }
-    
-    const exportString = commands.join('; ');
-    if (topicsRef.current.export) {
-      topicsRef.current.export.setValue(exportString);
-    }
-    navigator.clipboard.writeText(exportString);
-    alert(`Exported: ${exportString}`);
-  };
-
   const startAction = (type: 'Move' | 'Pass') => {
     const wp = getWaypointByType(WaypointType[type]);
     if (!wp) return;
@@ -307,19 +285,15 @@ const Field: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-white">2026 FRC Field</h2>
-        {settingType && (
-          <div className="bg-yellow-500 text-black px-4 py-1 rounded-full animate-pulse font-bold">
-            Click Field to set {settingType}
-          </div>
-        )}
-      </div>
-      
       <div className="flex flex-col lg:flex-row gap-6">
         <div ref={containerRef}
              className="relative flex-grow border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900 z-10" 
              style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
+          {settingType && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-6 py-2 rounded-full animate-pulse font-black uppercase tracking-widest shadow-2xl z-50 border-2 border-yellow-400">
+              Click Field to set {settingType}
+            </div>
+          )}
           <img 
             ref={imageRef} 
             src={fieldImage} 
@@ -429,14 +403,6 @@ const Field: React.FC = () => {
               </button>
             ))}
           </div>
-          
-          <button
-            onClick={handleExport}
-            disabled={waypoints.length === 0}
-            className="w-full mt-4 py-3 bg-blue-900/40 hover:bg-blue-800/60 disabled:bg-gray-800/20 disabled:text-gray-600 text-blue-300 font-bold rounded-lg transition-all active:scale-[0.98] border border-blue-500/30 text-xs"
-          >
-            Export All Waypoints
-          </button>
 
           <div className="mt-6 p-5 bg-gray-900/50 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex justify-between items-center mb-3">
