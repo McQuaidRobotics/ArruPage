@@ -26,7 +26,6 @@ export const NTBatteryBar: React.FC<NTBatteryBarProps> = ({ topic, label }) => {
   }, [nt, topic]);
 
   // Constraints
-  const minV = 0;
   const maxV = 13;
   const brownoutV = 6.8;
 
