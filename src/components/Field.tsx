@@ -58,6 +58,10 @@ const Field: React.FC = () => {
     passMaxHeight?: NetworkTablesTopic<number>;
     passMinHeight?: NetworkTablesTopic<number>;
     passTrigger?: NetworkTablesTopic<boolean>;
+    passWaypointX?: NetworkTablesTopic<number>;
+    passWaypointY?: NetworkTablesTopic<number>;
+    passHeight?: NetworkTablesTopic<number>;
+    export?: NetworkTablesTopic<string>;
   }>({});
 
 
@@ -100,6 +104,7 @@ const Field: React.FC = () => {
         passWaypointX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
         passWaypointY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
         passHeight: nt.createTopic<number>('/dashboard/robot/passHeight', NetworkTablesTypeInfos.kDouble),
+        export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
       };
 
       topicsRef.current = ntTopics;
