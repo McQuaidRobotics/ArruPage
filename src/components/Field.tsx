@@ -35,7 +35,9 @@ const Field: React.FC = () => {
   const [settingType, setSettingType] = useState<WaypointType | null>(null);
   const [activeActions, setActiveActions] = useState<{ [key: string]: boolean }>({});
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const [passHeight, setPassHeight] = useState(0);
+  const [passHeight, setPassHeight] = useState(0); // This represents Z
+  const [passMaxHeight, setPassMaxHeight] = useState(15.75); // Default 4.8m in ft
+  const [passMinHeight, setPassMinHeight] = useState(6.56);  // Default 2.0m in ft
   const [robotPose, setRobotPose] = useState<{ x: number; y: number; theta: number } | null>(null);
 
   const fieldLengthFeet = 57.5; // X-axis
@@ -52,9 +54,12 @@ const Field: React.FC = () => {
     moveTrigger?: NetworkTablesTopic<boolean>;
     passX?: NetworkTablesTopic<number>;
     passY?: NetworkTablesTopic<number>;
-    passHeight?: NetworkTablesTopic<number>;
+    passZ?: NetworkTablesTopic<number>;
+    passMaxHeight?: NetworkTablesTopic<number>;
+    passMinHeight?: NetworkTablesTopic<number>;
     passTrigger?: NetworkTablesTopic<boolean>;
   }>({});
+
 
   const getWaypointByType = (type: WaypointType) => {
     return waypoints.find(wp => wp.type === type);
@@ -85,10 +90,16 @@ const Field: React.FC = () => {
         moveX: nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble),
         moveY: nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble),
         moveTrigger: nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean),
-        passX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
-        passY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
-        passHeight: nt.createTopic<number>('/dashboard/robot/passHeight', NetworkTablesTypeInfos.kDouble),
+        passX: nt.createTopic<number>('/dashboard/robot/X', NetworkTablesTypeInfos.kDouble),
+        passY: nt.createTopic<number>('/dashboard/robot/Y', NetworkTablesTypeInfos.kDouble),
+        passZ: nt.createTopic<number>('/dashboard/robot/Z', NetworkTablesTypeInfos.kDouble),
+        passMaxHeight: nt.createTopic<number>('/dashboard/robot/MaxHeight', NetworkTablesTypeInfos.kDouble),
+        passMinHeight: nt.createTopic<number>('/dashboard/robot/MinHeight', NetworkTablesTypeInfos.kDouble),
         passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
+        // Legacy topics for compatibility
+        passWaypointX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
+        passWaypointY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
+        passHeight: nt.createTopic<number>('/dashboard/robot/passHeight', NetworkTablesTypeInfos.kDouble),
       };
 
       topicsRef.current = ntTopics;
@@ -100,8 +111,11 @@ const Field: React.FC = () => {
     const setup = async () => {
       try {
         await Promise.all(Object.values(ntTopics).map((t: any) => t.publish()));
-        if (isMounted && ntTopics.passHeight) {
-          ntTopics.passHeight.setValue(passHeight);
+        if (isMounted) {
+          ntTopics.passHeight?.setValue(passHeight);
+          ntTopics.passZ?.setValue(passHeight);
+          ntTopics.passMaxHeight?.setValue(passMaxHeight);
+          ntTopics.passMinHeight?.setValue(passMinHeight);
         }
       } catch (e) {
         console.warn("Failed to publish some topics", e);
@@ -182,18 +196,21 @@ const Field: React.FC = () => {
   }, [waypoints]);
 
   const getPoseFromEvent = (clientX: number, clientY: number) => {
-    if (!dimensions || !containerRef.current) return null;
+    if (!containerRef.current) return null;
     const rect = containerRef.current.getBoundingClientRect();
+    
+    // Calculate position relative to the container
     const xPx = clientX - rect.left;
     const yPx = clientY - rect.top;
 
-    const xFeet = Math.max(0, Math.min(fieldLengthFeet, (xPx / dimensions.width) * fieldLengthFeet));
-    const yFeet = Math.max(0, Math.min(fieldWidthFeet, ((dimensions.height - yPx) / dimensions.height) * fieldWidthFeet));
+    // Use the actual bounding rect dimensions for conversion
+    const xFeet = Math.max(0, Math.min(fieldLengthFeet, (xPx / rect.width) * fieldLengthFeet));
+    const yFeet = Math.max(0, Math.min(fieldWidthFeet, ((rect.height - yPx) / rect.height) * fieldWidthFeet));
     
     return { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
   };
 
-  const handleFieldClick = (event: React.MouseEvent<HTMLImageElement>) => {
+  const handleFieldClick = (event: React.MouseEvent) => {
     if (draggingIndex !== null) return;
     if (!settingType) return;
     
@@ -211,7 +228,7 @@ const Field: React.FC = () => {
     };
 
     setWaypoints(prev => [...prev.filter(wp => wp.type !== settingType), newWaypoint]);
-    setSettingType(null);
+    setSettingType(null); // Exit setting mode after selection
   };
 
   const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
@@ -258,6 +275,26 @@ const Field: React.FC = () => {
     };
   }, [draggingIndex]);
 
+  const handleExport = () => {
+    const moveWp = getWaypointByType(WaypointType.Move);
+    const passWp = getWaypointByType(WaypointType.Pass);
+    
+    const commands: string[] = [];
+    if (moveWp) {
+      commands.push(`DRIVE TO: ${moveWp.pose.x}, ${moveWp.pose.y}, ${moveWp.pose.theta}`);
+    }
+    if (passWp) {
+      commands.push(`AIM AT: ${passWp.pose.x}, ${passWp.pose.y}, ${passWp.pose.theta}; Z: ${passHeight}; MAX: ${passMaxHeight}; MIN: ${passMinHeight}`);
+    }
+    
+    const exportString = commands.join('; ');
+    if (topicsRef.current.export) {
+      topicsRef.current.export.setValue(exportString);
+    }
+    navigator.clipboard.writeText(exportString);
+    alert(`Exported: ${exportString}`);
+  };
+
   const startAction = (type: 'Move' | 'Pass') => {
     const wp = getWaypointByType(WaypointType[type]);
     if (!wp) return;
@@ -269,6 +306,15 @@ const Field: React.FC = () => {
     } else {
       topicsRef.current.passX?.setValue(wp.pose.x);
       topicsRef.current.passY?.setValue(wp.pose.y);
+      topicsRef.current.passZ?.setValue(passHeight);
+      topicsRef.current.passMaxHeight?.setValue(passMaxHeight);
+      topicsRef.current.passMinHeight?.setValue(passMinHeight);
+      
+      // Legacy compatibility
+      topicsRef.current.passWaypointX?.setValue(wp.pose.x);
+      topicsRef.current.passWaypointY?.setValue(wp.pose.y);
+      topicsRef.current.passHeight?.setValue(passHeight);
+      
       topicsRef.current.passTrigger?.setValue(true);
     }
     setActiveActions(prev => ({ ...prev, [type]: true }));
@@ -298,14 +344,18 @@ const Field: React.FC = () => {
             ref={imageRef} 
             src={fieldImage} 
             alt="Field" 
-            onClick={handleFieldClick} 
             draggable="false" 
-            className={`w-full h-full object-contain select-none ${
-              settingType ? 'cursor-crosshair' : ''
-            }`}
+            className="w-full h-full object-fill select-none"
           />
+          
+          {/* Click Overlay - ensures we capture clicks on the field surface */}
+          <div 
+            className={`absolute inset-0 z-10 ${settingType ? 'cursor-crosshair' : ''}`}
+            onClick={handleFieldClick}
+          />
+
           {dimensions && (
-            <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute inset-0 pointer-events-none z-0">
               {Array.from({ length: Math.floor(fieldLengthFeet / 5) * 2 }).map((_, i) => {
                 const gridInterval = 5;
                 const centerOffset = (fieldLengthFeet / 2) % gridInterval;
@@ -342,8 +392,8 @@ const Field: React.FC = () => {
                        : 'cursor-grab active:cursor-grabbing hover:scale-125'
                    } ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
                    style={{ 
-                     left: pixel.x, 
-                     top: pixel.y, 
+                     left: `${pixel.x}px`, 
+                     top: `${pixel.y}px`, 
                      backgroundColor: wp.color,
                      transform: `translate(-50%, -50%) ${selectedWaypointIndex === i ? 'scale(1.2)' : 'scale(1)'}`
                    }}
@@ -356,8 +406,8 @@ const Field: React.FC = () => {
               <div
                 className="absolute w-8 h-8 z-30"
                 style={{
-                  left: pixel.x,
-                  top: pixel.y,
+                  left: `${pixel.x}px`,
+                  top: `${pixel.y}px`,
                   transform: `translate(-50%, -50%) rotate(${robotPose.theta}deg)`,
                 }}
               >
@@ -403,30 +453,84 @@ const Field: React.FC = () => {
               </button>
             ))}
           </div>
+          
+          <button
+            onClick={handleExport}
+            disabled={waypoints.length === 0}
+            className="w-full mt-4 py-3 bg-blue-900/40 hover:bg-blue-800/60 disabled:bg-gray-800/20 disabled:text-gray-600 text-blue-300 font-bold rounded-lg transition-all active:scale-[0.98] border border-blue-500/30 text-xs"
+          >
+            Export All Waypoints
+          </button>
 
-          <div className="mt-6 p-5 bg-gray-900/50 rounded-xl border border-gray-700 shadow-lg">
-            <div className="flex justify-between items-center mb-3">
-              <label htmlFor="passHeight" className="text-base font-bold text-gray-200">Pass Height</label>
-              <span className="px-3 py-1 bg-gray-700 text-white font-mono text-base rounded-md">{passHeight} ft</span>
+          <div className="mt-6 p-5 bg-gray-900/50 rounded-xl border border-gray-700 shadow-lg space-y-6">
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label htmlFor="passZ" className="text-sm font-bold text-gray-400 uppercase tracking-wider">Z Height</label>
+                <span className="px-3 py-1 bg-gray-700 text-white font-mono text-base rounded-md">{passHeight} ft</span>
+              </div>
+              <input
+                type="range"
+                id="passZ"
+                min="0"
+                max="20"
+                step="0.1"
+                value={passHeight}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setPassHeight(val);
+                  topicsRef.current.passZ?.setValue(val);
+                  topicsRef.current.passHeight?.setValue(val);
+                }}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
+              />
             </div>
-            <input
-              type="range"
-              id="passHeight"
-              min="0"
-              max="15"
-              step="1"
-              value={passHeight}
-              onChange={(e) => {
-                const newHeight = parseInt(e.target.value, 10);
-                setPassHeight(newHeight);
-                topicsRef.current.passHeight?.setValue(newHeight);
-              }}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
-            />
+
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label htmlFor="passMaxHeight" className="text-sm font-bold text-gray-400 uppercase tracking-wider">Max Height</label>
+                <span className="px-3 py-1 bg-gray-700 text-white font-mono text-base rounded-md">{passMaxHeight.toFixed(2)} ft</span>
+              </div>
+              <input
+                type="range"
+                id="passMaxHeight"
+                min="0"
+                max="20"
+                step="0.1"
+                value={passMaxHeight}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setPassMaxHeight(val);
+                  topicsRef.current.passMaxHeight?.setValue(val);
+                }}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label htmlFor="passMinHeight" className="text-sm font-bold text-gray-400 uppercase tracking-wider">Min Height</label>
+                <span className="px-3 py-1 bg-gray-700 text-white font-mono text-base rounded-md">{passMinHeight.toFixed(2)} ft</span>
+              </div>
+              <input
+                type="range"
+                id="passMinHeight"
+                min="0"
+                max="20"
+                step="0.1"
+                value={passMinHeight}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setPassMinHeight(val);
+                  topicsRef.current.passMinHeight?.setValue(val);
+                }}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+              />
+            </div>
+            
             <div className="flex justify-between text-[10px] text-gray-500 font-mono mt-2 px-1">
               <span>0ft</span>
-              <span>7.5ft</span>
-              <span>15ft</span>
+              <span>10ft</span>
+              <span>20ft</span>
             </div>
           </div>
         </div>
