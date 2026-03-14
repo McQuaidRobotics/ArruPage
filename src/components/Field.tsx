@@ -25,6 +25,32 @@ type Waypoint = {
   type: WaypointType;
 };
 
+interface WaypointJSON {
+  pose?: { x: number; y: number; theta: number };
+  color?: string;
+  type?: WaypointType;
+}
+
+type FieldTopics = {
+  waypoints: NetworkTablesTopic<string>;
+  robotPose: NetworkTablesTopic<number[]>;
+  export: NetworkTablesTopic<string>;
+  clickX: NetworkTablesTopic<number>;
+  clickY: NetworkTablesTopic<number>;
+  moveX: NetworkTablesTopic<number>;
+  moveY: NetworkTablesTopic<number>;
+  moveTrigger: NetworkTablesTopic<boolean>;
+  passX: NetworkTablesTopic<number>;
+  passY: NetworkTablesTopic<number>;
+  passZ: NetworkTablesTopic<number>;
+  passMaxHeight: NetworkTablesTopic<number>;
+  passMinHeight: NetworkTablesTopic<number>;
+  passTrigger: NetworkTablesTopic<boolean>;
+  passWaypointX: NetworkTablesTopic<number>;
+  passWaypointY: NetworkTablesTopic<number>;
+  passHeight: NetworkTablesTopic<number>;
+};
+
 const Field: React.FC = () => {
   const { nt, connected } = useNetworkTables();
   const imageRef = useRef<HTMLImageElement>(null);
@@ -44,22 +70,7 @@ const Field: React.FC = () => {
   const fieldWidthFeet = 26.4;  // Y-axis
 
   // Topic Refs
-  const topicsRef = useRef<{
-    waypoints?: NetworkTablesTopic<string>;
-    robotPose?: NetworkTablesTopic<number[]>;
-    export?: NetworkTablesTopic<string>;
-    clickX?: NetworkTablesTopic<number>;
-    clickY?: NetworkTablesTopic<number>;
-    moveX?: NetworkTablesTopic<number>;
-    moveY?: NetworkTablesTopic<number>;
-    moveTrigger?: NetworkTablesTopic<boolean>;
-    passX?: NetworkTablesTopic<number>;
-    passY?: NetworkTablesTopic<number>;
-    passZ?: NetworkTablesTopic<number>;
-    passMaxHeight?: NetworkTablesTopic<number>;
-    passMinHeight?: NetworkTablesTopic<number>;
-    passTrigger?: NetworkTablesTopic<boolean>;
-  }>({});
+  const topicsRef = useRef<Partial<FieldTopics>>({});
 
 
   const getWaypointByType = (type: WaypointType) => {
@@ -80,7 +91,7 @@ const Field: React.FC = () => {
     if (!nt || !connected) return;
 
     let isMounted = true;
-    let ntTopics: any = null;
+    let ntTopics: FieldTopics | null = null;
 
     try {
       ntTopics = {
@@ -105,45 +116,50 @@ const Field: React.FC = () => {
       };
 
       topicsRef.current = ntTopics;
-    } catch (e) {
-      console.error("Failed to create topics:", e);
+    } catch (err) {
+      console.error("Failed to create topics:", err);
       return;
     }
 
     const setup = async () => {
       try {
-        await Promise.all(Object.values(ntTopics).map((t: any) => t.publish()));
+        if (!ntTopics) return;
+        await Promise.all(Object.values(ntTopics).map((t) => t.publish()));
         if (isMounted) {
-          ntTopics.passHeight?.setValue(passHeight);
-          ntTopics.passZ?.setValue(passHeight);
-          ntTopics.passMaxHeight?.setValue(passMaxHeight);
-          ntTopics.passMinHeight?.setValue(passMinHeight);
+          ntTopics.passHeight.setValue(passHeight);
+          ntTopics.passZ.setValue(passHeight);
+          ntTopics.passMaxHeight.setValue(passMaxHeight);
+          ntTopics.passMinHeight.setValue(passMinHeight);
         }
-      } catch (e) {
-        console.warn("Failed to publish some topics", e);
+      } catch (err) {
+        console.warn("Failed to publish some topics", err);
       }
     };
 
     setup();
 
-    const waypointSub = ntTopics.waypoints.subscribe((val: string) => {
+    const waypointSub = ntTopics.waypoints.subscribe((val: string | null) => {
       if (!val || !isMounted) return;
       try {
-        const parsed = JSON.parse(val);
+        const parsed = JSON.parse(val) as WaypointJSON[];
         if (!Array.isArray(parsed)) return;
         
-        const mapped: Waypoint[] = parsed.map((p: any) => ({
+        const mapped: Waypoint[] = parsed.map((p) => ({
           status: 'locked',
           pose: { x: p.pose?.x ?? 0, y: p.pose?.y ?? 0, theta: p.pose?.theta ?? 0 },
           color: p.color ?? WAYPOINT_COLORS.General,
           type: p.type ?? WaypointType.General,
         }));
 
-        setWaypoints(prev => JSON.stringify(prev.map(wp => ({ pose: wp.pose, type: wp.type }))) === JSON.stringify(mapped.map(wp => ({ pose: wp.pose, type: wp.type }))) ? prev : mapped);
-      } catch (e) { console.error('Failed to parse waypoints', e); }
+        setWaypoints(prev => {
+           const prevString = JSON.stringify(prev.map(wp => ({ pose: wp.pose, type: wp.type })));
+           const mappedString = JSON.stringify(mapped.map(wp => ({ pose: wp.pose, type: wp.type })));
+           return prevString === mappedString ? prev : mapped;
+        });
+      } catch (err) { console.error('Failed to parse waypoints', err); }
     });
 
-    const robotPoseSub = ntTopics.robotPose.subscribe((val: number[]) => {
+    const robotPoseSub = ntTopics.robotPose.subscribe((val: number[] | null) => {
       if (!isMounted) return;
       if (val && val.length >= 3) {
         setRobotPose({ x: val[0], y: val[1], theta: val[2] });
@@ -157,13 +173,13 @@ const Field: React.FC = () => {
       if (ntTopics) {
         ntTopics.waypoints.unsubscribe(waypointSub);
         ntTopics.robotPose.unsubscribe(robotPoseSub);
-        Object.values(ntTopics).forEach((t: any) => {
-          try { t.unpublish(); } catch(e) {}
+        Object.values(ntTopics).forEach((t) => {
+          try { t.unpublish(); } catch { /* ignore */ }
         });
       }
       topicsRef.current = {};
     };
-  }, [nt, connected]);
+  }, [nt, connected, passHeight, passMaxHeight, passMinHeight]);
 
   // Handle image resize
   useEffect(() => {
@@ -242,27 +258,27 @@ const Field: React.FC = () => {
     setSelectedWaypointIndex(index);
   };
 
-  const handleDragMove = (e: MouseEvent | TouchEvent) => {
-    if (draggingIndex === null) return;
-    
-    const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-    
-    const pose = getPoseFromEvent(clientX, clientY);
-    if (pose) {
-      setWaypoints(prev => {
-        const next = [...prev];
-        next[draggingIndex] = { ...next[draggingIndex], pose: { ...next[draggingIndex].pose, x: pose.x, y: pose.y } };
-        return next;
-      });
-    }
-  };
-
   const handleDragEnd = () => {
     setDraggingIndex(null);
   };
 
   useEffect(() => {
+    const handleDragMove = (e: MouseEvent | TouchEvent) => {
+        if (draggingIndex === null) return;
+        
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+        
+        const pose = getPoseFromEvent(clientX, clientY);
+        if (pose) {
+          setWaypoints(prev => {
+            const next = [...prev];
+            next[draggingIndex] = { ...next[draggingIndex], pose: { ...next[draggingIndex].pose, x: pose.x, y: pose.y } };
+            return next;
+          });
+        }
+    };
+
     if (draggingIndex !== null) {
       window.addEventListener('mousemove', handleDragMove);
       window.addEventListener('mouseup', handleDragEnd);
@@ -275,7 +291,7 @@ const Field: React.FC = () => {
       window.removeEventListener('touchmove', handleDragMove);
       window.removeEventListener('touchend', handleDragEnd);
     };
-  }, [draggingIndex]);
+  }, [draggingIndex]); 
 
   const handleExport = () => {
     const moveWp = getWaypointByType(WaypointType.Move);
