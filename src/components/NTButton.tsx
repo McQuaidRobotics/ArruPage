@@ -31,7 +31,7 @@ export const NTButton: React.FC<NTButtonProps> = ({ topic, label, initialValue =
                 await ntTopic.publish();
                 
                 // If we reach here, publish succeeded
-                if (ntTopic.getValue() === null) {
+                if (ntTopic.getValue() === null || (ntTopic.getValue() !== initialValue && attempts === maxAttempts - 1)) {
                     ntTopic.setValue(initialValue);
                 } else {
                     setValue(ntTopic.getValue() as boolean);

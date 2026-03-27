@@ -5,13 +5,13 @@ import { NetworkTablesTopic, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 // A palette of distinct colors for locked waypoints
 const WAYPOINT_COLORS = {
-  Shoot: '#FF00FF', // Fuchsia
+  Pass: '#FF00FF', // Fuchsia
   Move: '#00FF00',  // Lime
   General: '#FFFF00' // Yellow
 } as const;
 
 export const WaypointType = {
-  Shoot: 'Shoot',
+  Pass: 'Pass',
   Move: 'Move',
   General: 'General',
 } as const;
@@ -35,6 +35,10 @@ const Field: React.FC = () => {
   const [settingType, setSettingType] = useState<WaypointType | null>(null);
   const [activeActions, setActiveActions] = useState<{ [key: string]: boolean }>({});
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [passHeight, setPassHeight] = useState(0); // This represents Z
+  const [passMaxHeight, setPassMaxHeight] = useState(15.75); // Default 4.8m in ft
+  const [passMinHeight, setPassMinHeight] = useState(6.56);  // Default 2.0m in ft
+  const [robotPose, setRobotPose] = useState<{ x: number; y: number; theta: number } | null>(null);
 
   const fieldLengthFeet = 57.5; // X-axis
   const fieldWidthFeet = 26.4;  // Y-axis
@@ -42,7 +46,7 @@ const Field: React.FC = () => {
   // Topic Refs
   const topicsRef = useRef<{
     waypoints?: NetworkTablesTopic<string>;
-    export?: NetworkTablesTopic<string>;
+    robotPose?: NetworkTablesTopic<number[]>;
     clickX?: NetworkTablesTopic<number>;
     clickY?: NetworkTablesTopic<number>;
     moveX?: NetworkTablesTopic<number>;
@@ -50,8 +54,16 @@ const Field: React.FC = () => {
     moveTrigger?: NetworkTablesTopic<boolean>;
     passX?: NetworkTablesTopic<number>;
     passY?: NetworkTablesTopic<number>;
+    passZ?: NetworkTablesTopic<number>;
+    passMaxHeight?: NetworkTablesTopic<number>;
+    passMinHeight?: NetworkTablesTopic<number>;
     passTrigger?: NetworkTablesTopic<boolean>;
+    passWaypointX?: NetworkTablesTopic<number>;
+    passWaypointY?: NetworkTablesTopic<number>;
+    passHeight?: NetworkTablesTopic<number>;
+    export?: NetworkTablesTopic<string>;
   }>({});
+
 
   const getWaypointByType = (type: WaypointType) => {
     return waypoints.find(wp => wp.type === type);
@@ -70,24 +82,46 @@ const Field: React.FC = () => {
   useEffect(() => {
     if (!nt || !connected) return;
 
-    const ntTopics = {
-      waypoints: nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString),
-      export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
-      clickX: nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble),
-      clickY: nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble),
-      moveX: nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble),
-      moveY: nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble),
-      moveTrigger: nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean),
-      passX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
-      passY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
-      passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
-    };
+    let isMounted = true;
+    let ntTopics: any = null;
 
-    topicsRef.current = ntTopics;
+    try {
+      ntTopics = {
+        waypoints: nt.createTopic<string>('/dashboard/field/waypoints', NetworkTablesTypeInfos.kString),
+        robotPose: nt.createTopic<number[]>('/SmartDashboard/Field/Robot', NetworkTablesTypeInfos.kDoubleArray, []),
+        clickX: nt.createTopic<number>('/dashboard/field/clickX', NetworkTablesTypeInfos.kDouble),
+        clickY: nt.createTopic<number>('/dashboard/field/clickY', NetworkTablesTypeInfos.kDouble),
+        moveX: nt.createTopic<number>('/dashboard/robot/moveWaypointX', NetworkTablesTypeInfos.kDouble),
+        moveY: nt.createTopic<number>('/dashboard/robot/moveWaypointY', NetworkTablesTypeInfos.kDouble),
+        moveTrigger: nt.createTopic<boolean>('/dashboard/robot/moveTrigger', NetworkTablesTypeInfos.kBoolean),
+        passX: nt.createTopic<number>('/dashboard/robot/X', NetworkTablesTypeInfos.kDouble),
+        passY: nt.createTopic<number>('/dashboard/robot/Y', NetworkTablesTypeInfos.kDouble),
+        passZ: nt.createTopic<number>('/dashboard/robot/Z', NetworkTablesTypeInfos.kDouble),
+        passMaxHeight: nt.createTopic<number>('/dashboard/robot/MaxHeight', NetworkTablesTypeInfos.kDouble),
+        passMinHeight: nt.createTopic<number>('/dashboard/robot/MinHeight', NetworkTablesTypeInfos.kDouble),
+        passTrigger: nt.createTopic<boolean>('/dashboard/robot/passTrigger', NetworkTablesTypeInfos.kBoolean),
+        // Legacy topics for compatibility
+        passWaypointX: nt.createTopic<number>('/dashboard/robot/passWaypointX', NetworkTablesTypeInfos.kDouble),
+        passWaypointY: nt.createTopic<number>('/dashboard/robot/passWaypointY', NetworkTablesTypeInfos.kDouble),
+        passHeight: nt.createTopic<number>('/dashboard/robot/passHeight', NetworkTablesTypeInfos.kDouble),
+        export: nt.createTopic<string>('/dashboard/field/export', NetworkTablesTypeInfos.kString),
+      };
+
+      topicsRef.current = ntTopics;
+    } catch (e) {
+      console.error("Failed to create topics:", e);
+      return;
+    }
 
     const setup = async () => {
       try {
-        await Promise.all(Object.values(ntTopics).map(t => t.publish()));
+        await Promise.all(Object.values(ntTopics).map((t: any) => t.publish()));
+        if (isMounted) {
+          ntTopics.passHeight?.setValue(passHeight);
+          ntTopics.passZ?.setValue(passHeight);
+          ntTopics.passMaxHeight?.setValue(passMaxHeight);
+          ntTopics.passMinHeight?.setValue(passMinHeight);
+        }
       } catch (e) {
         console.warn("Failed to publish some topics", e);
       }
@@ -95,36 +129,41 @@ const Field: React.FC = () => {
 
     setup();
 
-    const subuid = ntTopics.waypoints.subscribe((val) => {
-      if (!val) return;
+    const waypointSub = ntTopics.waypoints.subscribe((val: string) => {
+      if (!val || !isMounted) return;
       try {
         const parsed = JSON.parse(val);
         if (!Array.isArray(parsed)) return;
         
-        const mapped: Waypoint[] = parsed.map((p: { pose?: { x: number; y: number; theta?: number }; color?: string; type?: WaypointType }) => ({
+        const mapped: Waypoint[] = parsed.map((p: any) => ({
           status: 'locked',
-          pose: {
-            x: p.pose?.x ?? 0,
-            y: p.pose?.y ?? 0,
-            theta: p.pose?.theta ?? 0
-          },
+          pose: { x: p.pose?.x ?? 0, y: p.pose?.y ?? 0, theta: p.pose?.theta ?? 0 },
           color: p.color ?? WAYPOINT_COLORS.General,
           type: p.type ?? WaypointType.General,
         }));
 
-        setWaypoints(prev => {
-          const currentStr = JSON.stringify(prev.map(wp => ({ pose: wp.pose, type: wp.type })));
-          const newStr = JSON.stringify(mapped.map(wp => ({ pose: wp.pose, type: wp.type })));
-          return currentStr === newStr ? prev : mapped;
-        });
-      } catch (e) {
-        console.error('Failed to parse waypoints', e);
+        setWaypoints(prev => JSON.stringify(prev.map(wp => ({ pose: wp.pose, type: wp.type }))) === JSON.stringify(mapped.map(wp => ({ pose: wp.pose, type: wp.type }))) ? prev : mapped);
+      } catch (e) { console.error('Failed to parse waypoints', e); }
+    });
+
+    const robotPoseSub = ntTopics.robotPose.subscribe((val: number[]) => {
+      if (!isMounted) return;
+      if (val && val.length >= 3) {
+        setRobotPose({ x: val[0], y: val[1], theta: val[2] });
+      } else {
+        setRobotPose(null);
       }
     });
 
     return () => {
-      ntTopics.waypoints.unsubscribe(subuid);
-      Object.values(ntTopics).forEach(t => t.unpublish());
+      isMounted = false;
+      if (ntTopics) {
+        ntTopics.waypoints.unsubscribe(waypointSub);
+        ntTopics.robotPose.unsubscribe(robotPoseSub);
+        Object.values(ntTopics).forEach((t: any) => {
+          try { t.unpublish(); } catch(e) {}
+        });
+      }
       topicsRef.current = {};
     };
   }, [nt, connected]);
@@ -162,18 +201,21 @@ const Field: React.FC = () => {
   }, [waypoints]);
 
   const getPoseFromEvent = (clientX: number, clientY: number) => {
-    if (!dimensions || !containerRef.current) return null;
+    if (!containerRef.current) return null;
     const rect = containerRef.current.getBoundingClientRect();
+    
+    // Calculate position relative to the container
     const xPx = clientX - rect.left;
     const yPx = clientY - rect.top;
 
-    const xFeet = Math.max(0, Math.min(fieldLengthFeet, (xPx / dimensions.width) * fieldLengthFeet));
-    const yFeet = Math.max(0, Math.min(fieldWidthFeet, ((dimensions.height - yPx) / dimensions.height) * fieldWidthFeet));
+    // Use the actual bounding rect dimensions for conversion
+    const xFeet = Math.max(0, Math.min(fieldLengthFeet, (xPx / rect.width) * fieldLengthFeet));
+    const yFeet = Math.max(0, Math.min(fieldWidthFeet, ((rect.height - yPx) / rect.height) * fieldWidthFeet));
     
     return { x: parseFloat(xFeet.toFixed(2)), y: parseFloat(yFeet.toFixed(2)), theta: 0 };
   };
 
-  const handleFieldClick = (event: React.MouseEvent<HTMLImageElement>) => {
+  const handleFieldClick = (event: React.MouseEvent) => {
     if (draggingIndex !== null) return;
     if (!settingType) return;
     
@@ -191,10 +233,13 @@ const Field: React.FC = () => {
     };
 
     setWaypoints(prev => [...prev.filter(wp => wp.type !== settingType), newWaypoint]);
-    setSettingType(null);
+    setSettingType(null); // Exit setting mode after selection
   };
 
   const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
+    const wp = waypoints[index];
+    if (activeActions[wp.type]) return; // Prevent drag if active
+
     e.stopPropagation();
     setDraggingIndex(index);
     setSelectedWaypointIndex(index);
@@ -237,14 +282,14 @@ const Field: React.FC = () => {
 
   const handleExport = () => {
     const moveWp = getWaypointByType(WaypointType.Move);
-    const shootWp = getWaypointByType(WaypointType.Shoot);
+    const passWp = getWaypointByType(WaypointType.Pass);
     
     const commands: string[] = [];
     if (moveWp) {
       commands.push(`DRIVE TO: ${moveWp.pose.x}, ${moveWp.pose.y}, ${moveWp.pose.theta}`);
     }
-    if (shootWp) {
-      commands.push(`AIM AT: ${shootWp.pose.x}, ${shootWp.pose.y}, ${shootWp.pose.theta}`);
+    if (passWp) {
+      commands.push(`AIM AT: ${passWp.pose.x}, ${passWp.pose.y}, ${passWp.pose.theta}; Z: ${passHeight}; MAX: ${passMaxHeight}; MIN: ${passMinHeight}`);
     }
     
     const exportString = commands.join('; ');
@@ -255,7 +300,7 @@ const Field: React.FC = () => {
     alert(`Exported: ${exportString}`);
   };
 
-  const startAction = (type: 'Move' | 'Shoot') => {
+  const startAction = (type: 'Move' | 'Pass') => {
     const wp = getWaypointByType(WaypointType[type]);
     if (!wp) return;
 
@@ -266,12 +311,21 @@ const Field: React.FC = () => {
     } else {
       topicsRef.current.passX?.setValue(wp.pose.x);
       topicsRef.current.passY?.setValue(wp.pose.y);
+      topicsRef.current.passZ?.setValue(passHeight);
+      topicsRef.current.passMaxHeight?.setValue(passMaxHeight);
+      topicsRef.current.passMinHeight?.setValue(passMinHeight);
+      
+      // Legacy compatibility
+      topicsRef.current.passWaypointX?.setValue(wp.pose.x);
+      topicsRef.current.passWaypointY?.setValue(wp.pose.y);
+      topicsRef.current.passHeight?.setValue(passHeight);
+      
       topicsRef.current.passTrigger?.setValue(true);
     }
     setActiveActions(prev => ({ ...prev, [type]: true }));
   };
 
-  const stopAction = (type: 'Move' | 'Shoot') => {
+  const stopAction = (type: 'Move' | 'Pass') => {
     if (type === 'Move') {
       topicsRef.current.moveTrigger?.setValue(false);
     } else {
@@ -281,71 +335,214 @@ const Field: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-white">2026 FRC Field</h2>
-        {settingType && (
-          <div className="bg-yellow-500 text-black px-4 py-1 rounded-full animate-pulse font-bold">
-            Click Field to set {settingType}
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div ref={containerRef}
+             className="relative flex-grow border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900 z-10" 
+             style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
+          {settingType && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-6 py-2 rounded-full animate-pulse font-black uppercase tracking-widest shadow-2xl z-50 border-2 border-yellow-400">
+              Click Field to set {settingType}
+            </div>
+          )}
+          <img 
+            ref={imageRef} 
+            src={fieldImage} 
+            alt="Field" 
+            draggable="false" 
+            className="w-full h-full object-fill select-none"
+          />
+          
+          {/* Click Overlay - ensures we capture clicks on the field surface */}
+          <div 
+            className={`absolute inset-0 z-10 ${settingType ? 'cursor-crosshair' : ''}`}
+            onClick={handleFieldClick}
+          />
+
+          {dimensions && (
+            <div className="absolute inset-0 pointer-events-none z-0">
+              {Array.from({ length: Math.floor(fieldLengthFeet / 5) * 2 }).map((_, i) => {
+                const gridInterval = 5;
+                const centerOffset = (fieldLengthFeet / 2) % gridInterval;
+                const xFeet = centerOffset + (i - Math.floor(fieldLengthFeet / 10)) * gridInterval;
+                if (xFeet < 0 || xFeet > fieldLengthFeet) return null;
+                const x = (xFeet / fieldLengthFeet) * dimensions.width;
+                return <div key={`v-${i}`} className="absolute top-0 bottom-0 w-px" style={{ left: x, backgroundColor: 'rgba(0, 0, 0, 0.5)' }} />;
+              })}
+              {Array.from({ length: Math.floor(fieldWidthFeet / 5) * 2 }).map((_, i) => {
+                const gridInterval = 5;
+                const centerOffset = (fieldWidthFeet / 2) % gridInterval;
+                const yFeet = centerOffset + (i - Math.floor(fieldWidthFeet / 10)) * gridInterval;
+                if (yFeet < 0 || yFeet > fieldWidthFeet) return null;
+                const y = (yFeet / fieldWidthFeet) * dimensions.height;
+                return <div key={`h-${i}`} className="absolute left-0 right-0 h-px" style={{ top: y, backgroundColor: 'rgba(0, 0, 0, 0.5)' }} />;
+              })}
+              {(() => {
+                const middleXFeet = fieldLengthFeet / 2;
+                const middleX = (middleXFeet / fieldLengthFeet) * dimensions.width;
+                return <div key="v-middle" className="absolute top-0 bottom-0 w-0.5" style={{ left: middleX, backgroundColor: 'rgba(0, 0, 0, 0.9)' }} />;
+              })()}
+            </div>
+          )}
+          {waypoints.map((wp, i) => {
+            const pixel = poseToPixel(wp.pose);
+            const isActive = activeActions[wp.type];
+            return (
+              <div key={i} 
+                   onMouseDown={(e) => handleDragStart(e, i)}
+                   onTouchStart={(e) => handleDragStart(e, i)}
+                   className={`absolute w-6 h-6 rounded-full border-2 z-20 transition-transform ${
+                     isActive 
+                       ? 'cursor-not-allowed opacity-80' 
+                       : 'cursor-grab active:cursor-grabbing hover:scale-125'
+                   } ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
+                   style={{ 
+                     left: `${pixel.x}px`, 
+                     top: `${pixel.y}px`, 
+                     backgroundColor: wp.color,
+                     transform: `translate(-50%, -50%) ${selectedWaypointIndex === i ? 'scale(1.2)' : 'scale(1)'}`
+                   }}
+              />
+            );
+          })}
+          {robotPose && dimensions && (() => {
+            const pixel = poseToPixel(robotPose);
+            return (
+              <div
+                className="absolute w-8 h-8 z-30"
+                style={{
+                  left: `${pixel.x}px`,
+                  top: `${pixel.y}px`,
+                  transform: `translate(-50%, -50%) rotate(${robotPose.theta}deg)`,
+                }}
+              >
+                <svg className="w-full h-full" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L3 22H21L12 2Z" fill="rgba(0, 150, 255, 0.7)" stroke="white" strokeWidth="1.5" />
+                </svg>
+              </div>
+            );
+          })()}
+        </div>
+
+        <div className="lg:w-64 flex flex-col gap-4 shrink-0 z-0">
+          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Waypoint Settings</h3>
+          <div className="flex flex-col gap-4">
+            {(['Move', 'Pass'] as WaypointType[]).map(type => (
+              <button
+                key={type}
+                onClick={() => {
+                  const currentWaypoint = getWaypointByType(type);
+
+                  if (currentWaypoint) {
+                    // Remove the waypoint
+                    setWaypoints(prev => prev.filter(wp => wp.type !== type));
+                    
+                    // Stop any active actions associated with this type
+                    if (type === 'Move' && activeActions.Move) stopAction('Move');
+                    if (type === 'Pass' && activeActions.Pass) stopAction('Pass');
+                    
+                    // Immediately re-enter setting mode for this type
+                    setSettingType(type);
+                  } else {
+                    // Toggle setting mode
+                    setSettingType(prev => prev === type ? null : type);
+                  }
+                }}
+                className={`w-full px-4 py-6 text-base font-black uppercase tracking-tighter rounded-xl transition-all border-2 shadow-lg ${
+                  settingType === type 
+                    ? 'bg-yellow-500 text-black border-yellow-400 scale-95 shadow-yellow-500/20' 
+                    : 'bg-gray-800 text-white border-gray-700 hover:bg-gray-700 hover:border-gray-600'
+                }`}
+              >
+                {getWaypointByType(type) ? `Reset ${type}` : `Set ${type}`}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
-      
-      <div ref={containerRef}
-           className="relative w-full border-2 border-gray-700 rounded-lg overflow-hidden bg-gray-900" 
-           style={{ aspectRatio: `${fieldLengthFeet}/${fieldWidthFeet}` }}>
-        <img 
-  ref={imageRef} 
-  src={fieldImage} 
-  alt="Field" 
-  onClick={handleFieldClick} 
-  // 1. This prevents the browser from trying to "drag" the image file
-  draggable="false" 
-  className={`w-full h-full object-contain select-none ${
-    settingType ? 'cursor-crosshair' : ''
-  }`}
-/>
-        {waypoints.map((wp, i) => {
-          const pixel = poseToPixel(wp.pose);
-          return (
-            <div key={i} 
-                 onMouseDown={(e) => handleDragStart(e, i)}
-                 onTouchStart={(e) => handleDragStart(e, i)}
-                 className={`absolute w-6 h-6 rounded-full border-2 cursor-grab active:cursor-grabbing z-20 transition-transform hover:scale-125 ${selectedWaypointIndex === i ? 'border-white scale-125 shadow-white/50 shadow-lg' : 'border-black/50'}`}
-                 style={{ 
-                   left: pixel.x, 
-                   top: pixel.y, 
-                   backgroundColor: wp.color,
-                   transform: `translate(-50%, -50%) ${selectedWaypointIndex === i ? 'scale(1.2)' : 'scale(1)'}`
-                 }}
-            />
-          );
-        })}
+          
+          <button
+            onClick={handleExport}
+            disabled={waypoints.length === 0}
+            className="w-full mt-4 py-3 bg-blue-900/40 hover:bg-blue-800/60 disabled:bg-gray-800/20 disabled:text-gray-600 text-blue-300 font-bold rounded-lg transition-all active:scale-[0.98] border border-blue-500/30 text-xs"
+          >
+            Export All Waypoints
+          </button>
+
+          <div className="mt-6 p-5 bg-gray-900/50 rounded-xl border border-gray-700 shadow-lg space-y-6">
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label htmlFor="passZ" className="text-sm font-bold text-gray-400 uppercase tracking-wider">Z Height</label>
+                <span className="px-3 py-1 bg-gray-700 text-white font-mono text-base rounded-md">{passHeight} ft</span>
+              </div>
+              <input
+                type="range"
+                id="passZ"
+                min="0"
+                max="20"
+                step="0.1"
+                value={passHeight}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setPassHeight(val);
+                  topicsRef.current.passZ?.setValue(val);
+                  topicsRef.current.passHeight?.setValue(val);
+                }}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label htmlFor="passMaxHeight" className="text-sm font-bold text-gray-400 uppercase tracking-wider">Max Height</label>
+                <span className="px-3 py-1 bg-gray-700 text-white font-mono text-base rounded-md">{passMaxHeight.toFixed(2)} ft</span>
+              </div>
+              <input
+                type="range"
+                id="passMaxHeight"
+                min="0"
+                max="20"
+                step="0.1"
+                value={passMaxHeight}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setPassMaxHeight(val);
+                  topicsRef.current.passMaxHeight?.setValue(val);
+                }}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label htmlFor="passMinHeight" className="text-sm font-bold text-gray-400 uppercase tracking-wider">Min Height</label>
+                <span className="px-3 py-1 bg-gray-700 text-white font-mono text-base rounded-md">{passMinHeight.toFixed(2)} ft</span>
+              </div>
+              <input
+                type="range"
+                id="passMinHeight"
+                min="0"
+                max="20"
+                step="0.1"
+                value={passMinHeight}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setPassMinHeight(val);
+                  topicsRef.current.passMinHeight?.setValue(val);
+                }}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+              />
+            </div>
+            
+            <div className="flex justify-between text-[10px] text-gray-500 font-mono mt-2 px-1">
+              <span>0ft</span>
+              <span>10ft</span>
+              <span>20ft</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4">
-        {/* Waypoint Setting Buttons */}
-        <div className="grid grid-cols-2 gap-4">
-          {(['Move', 'Shoot'] as WaypointType[]).map(type => (
-            <button
-              key={type}
-              onClick={() => {
-                if (getWaypointByType(type)) {
-                  setWaypoints(prev => prev.filter(wp => wp.type !== type));
-                  setSettingType(type);
-                } else {
-                  setSettingType(prev => prev === type ? null : type);
-                }
-              }}
-              className={`px-3 py-3 text-sm font-bold rounded-lg transition-colors ${settingType === type ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
-            >
-              {getWaypointByType(type) ? `Reset ${type}` : `Set ${type}`}
-            </button>
-          ))}
-        </div>
-        
-        {/* Action Buttons (Hold) */}
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onMouseDown={() => startAction('Move')}
             onMouseUp={() => stopAction('Move')}
@@ -353,76 +550,29 @@ const Field: React.FC = () => {
             onTouchStart={() => startAction('Move')}
             onTouchEnd={() => stopAction('Move')}
             disabled={!getWaypointByType(WaypointType.Move)}
-            className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
+            className={`w-full py-8 text-2xl font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl border-4 select-none ${
               activeActions.Move 
                 ? 'bg-green-500 text-black border-green-400 scale-95' 
-                : 'bg-green-700 text-white border-green-600 hover:bg-green-600 disabled:opacity-30 disabled:cursor-not-allowed'
+                : 'bg-green-700 text-white border-green-600 hover:bg-green-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-green-900/20'
             }`}
           >
             {activeActions.Move ? 'Driving...' : 'Drive To (HOLD)'}
           </button>
 
           <button
-            onMouseDown={() => startAction('Shoot')}
-            onMouseUp={() => stopAction('Shoot')}
-            onMouseLeave={() => activeActions.Shoot && stopAction('Shoot')}
-            onTouchStart={() => startAction('Shoot')}
-            onTouchEnd={() => stopAction('Shoot')}
-            disabled={!getWaypointByType(WaypointType.Shoot)}
-            className={`w-full py-4 font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border-2 select-none ${
-              activeActions.Shoot 
+            onClick={() => activeActions.Pass ? stopAction('Pass') : startAction('Pass')}
+            disabled={!getWaypointByType(WaypointType.Pass)}
+            className={`w-full py-8 text-2xl font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl border-4 select-none ${
+              activeActions.Pass 
                 ? 'bg-pink-500 text-black border-pink-400 scale-95' 
-                : 'bg-pink-700 text-white border-pink-600 hover:bg-pink-600 disabled:opacity-30 disabled:cursor-not-allowed'
+                : 'bg-pink-700 text-white border-pink-600 hover:bg-pink-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-pink-900/20'
             }`}
           >
-            {activeActions.Shoot ? 'Shooting...' : 'Shoot (HOLD)'}
+            {activeActions.Pass ? 'Passing...' : 'Custom Pass Location'}
           </button>
         </div>
-
-        {/* Export Button */}
-        <button
-          onClick={handleExport}
-          disabled={waypoints.length === 0}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold rounded-lg transition-all active:scale-[0.98] border border-blue-400/20"
-        >
-          Export Waypoints String
-        </button>
       </div>
 
-      {selectedWaypointIndex !== null && waypoints[selectedWaypointIndex] && (
-        <div className="p-4 bg-gray-800 rounded-lg border-l-4 border-blue-500 flex justify-between items-center">
-          <div>
-            <h3 className="font-bold">{waypoints[selectedWaypointIndex].type} Waypoint</h3>
-            <p className="text-sm text-gray-400">
-              X: {waypoints[selectedWaypointIndex].pose.x} ft, 
-              Y: {waypoints[selectedWaypointIndex].pose.y} ft, 
-              θ: {waypoints[selectedWaypointIndex].pose.theta}°
-            </p>
-          </div>
-          <button onClick={() => setSelectedWaypointIndex(null)} className="text-gray-500 hover:text-white">Close</button>
-        </div>
-      )}
-
-      {waypoints.length > 0 && (
-        <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
-          <h3 className="text-lg font-bold text-white mb-3">Active Waypoints</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {waypoints.map((wp, index) => (
-              <div key={index} 
-                   onClick={() => setSelectedWaypointIndex(index)}
-                   className={`flex items-center justify-between p-2 rounded bg-gray-900/50 border cursor-pointer transition-colors ${selectedWaypointIndex === index ? 'border-blue-500 bg-gray-900' : 'border-gray-700 hover:border-gray-600'}`}>
-                <div className="flex items-center gap-2">
-                  <div style={{ backgroundColor: wp.color }} className="w-3 h-3 rounded-full shadow-sm" />
-                  <span className="font-semibold text-sm">{wp.type}</span>
-                </div>
-                <div className="font-mono text-xs text-gray-400">
-                  ({wp.pose.x.toFixed(1)}, {wp.pose.y.toFixed(1)}, {wp.pose.theta.toFixed(0)}°)
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

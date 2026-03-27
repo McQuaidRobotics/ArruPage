@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { NetworkTablesProvider } from './NetworkTablesContext';
 import { useNetworkTables } from './useNetworkTables';
 import { NTButton } from './components/NTButton';
@@ -6,13 +7,49 @@ import { NTMomentaryButton } from './components/NTMomentaryButton';
 import { NTNumberReadout } from './components/NTNumberReadout';
 import { NTSlider } from './components/NTSlider';
 import { NTClock } from './components/NTClock';
+import { NTBatteryBar } from './components/NTBatteryBar';
 import MapPage from './map/map';
-import { useState, useEffect } from 'react';
+
+// Simple Error Boundary to catch and display crashes
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Dashboard Crash:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-black text-red-500 p-10 flex flex-col items-center justify-center">
+          <h1 className="text-4xl font-black mb-4 uppercase">Something went wrong</h1>
+          <pre className="bg-gray-900 p-4 rounded-xl border border-red-500/30 text-xs overflow-auto max-w-full">
+            {this.state.error?.toString()}
+          </pre>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-8 px-6 py-3 bg-red-600 text-white rounded-full font-bold uppercase tracking-widest hover:bg-red-500 transition-colors"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const ConnectionStatus = () => {
   const { connected } = useNetworkTables();
   return (
-    <div className={`fixed top-4 right-4 px-3 py-1 rounded-full text-sm font-medium ${
+    <div className={`fixed top-4 right-4 px-3 py-1 rounded-full text-sm font-medium z-[100] ${
       connected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
     }`}>
       {connected ? '● Connected' : '○ Disconnected'}
@@ -23,14 +60,6 @@ const ConnectionStatus = () => {
 function Dashboard({ goToMap }: { goToMap: () => void }) {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 relative overflow-auto">
-      <ConnectionStatus />
-
-      <div className="absolute top-4 left-4 flex items-center gap-2 z-50">
-        <button onClick={goToMap} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold transition-all active:scale-95 shadow-lg mr-2">Open Map</button>
-        <div className="ml-2">
-          <p className="text-sm text-gray-400 font-mono">Team 3173</p>
-        </div>
-      </div>
       
       <header className="mb-8 flex flex-col items-center text-center">
         <h1 className="text-3xl font-black text-white uppercase tracking-tighter">FRC Dashboard 2026</h1>
@@ -42,13 +71,24 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
       </header>
 
       <main className="space-y-8 max-w-7xl mx-auto pb-12">
+        {/* Main Navigation */}
+        <div className="text-center">
+            <button 
+              onClick={goToMap}
+              className="w-full max-w-sm px-8 py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl border-4 border-indigo-500/50 select-none active:scale-95 text-2xl"
+            >
+              Open Field Map
+            </button>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Toggle Buttons */}
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-blue-400 uppercase tracking-wider">Toggle Controls</h2>
             <div className="flex flex-col gap-4">
-              <NTButton topic="/dashboard/intake" label="Intake" initialValue={true} />
-              <NTButton topic="/dashboard/shooter" label="Shooter" initialValue={true} />
+                             <NTButton topic="/dashboard/intake" label="Intake" initialValue={false} />
+                             <NTButton topic="/dashboard/shooter" label="Shooter" initialValue={true} />
+                             <NTButton topic="/dashboard/disableAutoShoot" label="Auto Shoot" initialValue={true} />
             </div>
           </div>
 
@@ -76,7 +116,7 @@ function Dashboard({ goToMap }: { goToMap: () => void }) {
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
             <h2 className="text-xl font-bold mb-4 text-blue-400 uppercase tracking-wider">Sensor Data</h2>
             <div className="flex flex-col gap-4">
-              <NTNumberReadout topic="/dashboard/battery" label="Battery" unit="V" />
+              <NTBatteryBar topic="/dashboard/battery" label="Robot Battery" />
               <NTNumberReadout topic="/dashboard/time" label="Match Time" unit="s" precision={0} />
             </div>
           </div>
@@ -112,34 +152,31 @@ function App() {
   }, []);
 
   const goToMap = () => {
-    setPage('map');
     window.history.pushState({}, '', '/map');
+    setPage('map');
+    window.scrollTo(0, 0);
   };
-
-
 
   const goBack = () => {
+    window.history.pushState({}, '', '/');
     setPage('dashboard');
-    if (window.location.pathname === '/map' || window.location.pathname === '/climb') {
-      window.history.pushState({}, '', '/');
-    }
-  };
-
-  const renderPage = () => {
-    switch (page) {
-      case 'map':
-        return <MapPage onBack={goBack} />;
-      default:
-        return <Dashboard goToMap={goToMap} />;
-    }
+    window.scrollTo(0, 0);
   };
 
   return (
-    <NetworkTablesProvider robotIp={robotIp}>
-      <div className="min-h-screen bg-gray-900 overflow-hidden">
-        {renderPage()}
-      </div>
-    </NetworkTablesProvider>
+    <ErrorBoundary>
+      <NetworkTablesProvider robotIp={robotIp}>
+        <div className="min-h-screen bg-gray-900 text-white">
+          <ConnectionStatus />
+          <div className={page === 'dashboard' ? 'block' : 'hidden'}>
+            <Dashboard goToMap={goToMap} />
+          </div>
+          <div className={page === 'map' ? 'block' : 'hidden'}>
+            <MapPage onBack={goBack} refreshKey={0} />
+          </div>
+        </div>
+      </NetworkTablesProvider>
+    </ErrorBoundary>
   );
 }
 

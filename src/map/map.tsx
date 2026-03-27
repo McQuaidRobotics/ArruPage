@@ -1,21 +1,21 @@
 import React from 'react';
 import Field from '../components/Field';
 
-const MapPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+const MapPage: React.FC<{ onBack: () => void; refreshKey: number }> = ({ onBack, refreshKey }) => {
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6 relative">
+    <div className="min-h-screen bg-gray-900 text-white relative overflow-auto p-4">
       <div className="absolute top-4 left-4 z-50">
         <button onClick={onBack} className="px-3 py-1 bg-gray-800/70 hover:bg-gray-700 rounded-md text-sm transition-colors active:scale-95">Back</button>
       </div>
 
-      <header className="mb-6 text-center">
+      <header className="mb-2 text-center pt-4">
         <h1 className="text-2xl font-bold text-gray-400">Live Field Map</h1>
-        <p className="text-sm text-gray-500">Automatically updates from the simulation</p>
+        <p className="text-sm text-gray-500">Updates from robot when opened</p>
       </header>
 
-      <main className="max-w-6xl mx-auto">
-        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-          <Field />
+      <main className="max-w-full mx-auto">
+        <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
+          <Field key={refreshKey} />
         </div>
       </main>
     </div>
@@ -23,3 +23,4 @@ const MapPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 };
 
 export default MapPage;
+
